@@ -253,7 +253,7 @@ DIRECT_CAREER_KEYWORDS = {
     "animation": ("Animator", "Game Designer", "Illustrator"), "game": ("Game Designer", "Game Developer", "Animator"),
     "writing": ("Writer", "Journalist", "Content Strategist"), "writer": ("Writer", "Technical Writer", "Journalist"),
     "design": ("UX Designer", "Graphic Designer", "Product Designer"), "art": ("Graphic Designer", "Illustrator", "Visual Artist"),
-    "coding": ("Software Engineer", "Front-End Developer", "Back-End Developer"), "programming": ("Software Engineer", "Full-Stack Developer", "Mobile App Developer"),
+    "coding": ("Software Engineer", "Front-End Developer", "Back-End Developer"), "coder": ("Software Engineer", "Front-End Developer", "Back-End Developer"), "developer": ("Software Engineer", "Full-Stack Developer", "Mobile App Developer"), "programming": ("Software Engineer", "Full-Stack Developer", "Mobile App Developer"),
     "software": ("Software Engineer", "Full-Stack Developer", "Cloud Engineer"), "cybersecurity": ("Cybersecurity Analyst", "Penetration Tester / Ethical Hacker", "Information Security Manager"),
     "ai": ("Machine Learning Engineer", "AI Research Scientist", "Data Scientist"), "data": ("Data Analyst", "Data Scientist", "Data Engineer"),
     "robot": ("Robotics Engineer", "Robotics Software Engineer", "Mechatronics Engineer"),
@@ -289,6 +289,37 @@ DIRECT_CAREER_KEYWORDS = {
     "voice": ("Voice Coach", "Radio Host", "Voice Actor"), "gaming": ("Game Developer", "Game Designer", "Esports Player"), "esports": ("Esports Player", "Esports Coach/Analyst", "E-sports Team Manager"),
     "history": ("Historian", "Archaeologist", "Museum Curator"), "archaeology": ("Archaeologist", "Museum Curator", "Anthropologist"),
     "religion": ("Religious Minister / Clergy", "Community Organizer", "Counselor (Mental Health)"), "counselling": ("Counsellor", "Psychologist", "Career Counselor"),
+}
+
+# Specific next skills for common careers. These make the no-cost mentor
+# answer the student's actual question instead of repeating a generic reply.
+ROLE_SKILL_GUIDANCE = {
+    "chef": ("knife skills and food safety", "flavour balancing and recipe development", "kitchen time management"),
+    "coder": ("programming fundamentals", "problem-solving and debugging", "Git/GitHub plus small projects"),
+    "coding": ("programming fundamentals", "problem-solving and debugging", "Git/GitHub plus small projects"),
+    "developer": ("programming fundamentals", "data structures and debugging", "Git/GitHub plus real projects"),
+    "actor": ("acting technique and voice training", "audition preparation", "a performance showreel"),
+    "acting": ("acting technique and voice training", "audition preparation", "a performance showreel"),
+    "poet": ("regular writing practice", "editing and literary analysis", "a small published portfolio"),
+    "writer": ("clear writing and editing", "research", "a portfolio of finished pieces"),
+    "doctor": ("strong biology and chemistry", "clinical communication", "volunteering or healthcare exposure"),
+    "medicine": ("strong biology and chemistry", "clinical communication", "volunteering or healthcare exposure"),
+    "scientist": ("scientific method and lab skills", "data analysis", "research projects"),
+    "engineer": ("maths and physics foundations", "design/problem-solving", "hands-on technical projects"),
+    "designer": ("design fundamentals", "relevant tools such as Figma or Adobe", "a strong visual portfolio"),
+    "lawyer": ("reading and legal reasoning", "clear writing and public speaking", "debate or legal-shadowing experience"),
+    "law": ("reading and legal reasoning", "clear writing and public speaking", "debate or legal-shadowing experience"),
+    "teacher": ("subject expertise", "clear explanation and active listening", "tutoring or classroom experience"),
+    "psychology": ("research methods", "active listening and ethics", "relevant volunteering"),
+    "business": ("communication and presentation", "basic finance", "leadership through a small project"),
+    "entrepreneur": ("problem discovery", "basic finance and marketing", "testing a small real idea"),
+    "pilot": ("maths and physics", "situational awareness", "aviation medical and flight-training research"),
+    "sports": ("sport-specific training", "fitness and recovery", "teamwork and performance analysis"),
+    "makeup": ("colour theory and hygiene", "practice on varied looks", "a professional photo portfolio"),
+    "photography": ("camera and lighting basics", "editing", "a curated photo portfolio"),
+    "music": ("consistent instrument or vocal practice", "music theory", "recorded performances"),
+    "nurse": ("biology and patient care", "communication", "clinical observation or volunteering"),
+    "veterinarian": ("biology and animal care", "observation skills", "animal-welfare volunteering"),
 }
 
 CAREER_FIELD_SIGNALS = {
@@ -655,6 +686,15 @@ def job_titles_from_text(text: str) -> tuple[str, ...]:
     return tuple(matches[:3])
 
 
+def specific_skills_for_question(text: str) -> tuple[str, ...]:
+    """Return precise learning priorities when a role is named in a question."""
+    lowered = text.lower()
+    for keyword in sorted(ROLE_SKILL_GUIDANCE, key=len, reverse=True):
+        if re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", lowered):
+            return ROLE_SKILL_GUIDANCE[keyword]
+    return ()
+
+
 def is_career_mentor_question(question: str) -> bool:
     """Keep the mentor career-focused while allowing natural student wording."""
     text = question.lower()
@@ -690,7 +730,8 @@ def built_in_mentor_reply(question: str) -> str:
         options = "; ".join(f"{item['name']} ({item['field']})" for item in universities)
         return f"For {focus}, good places to research first are: {options}. Compare the curriculum, location, entry requirements, total cost, scholarships, and internship opportunities before applying. You can also use the Universities Worldwide page to search the live global directory by country or institution name."
     if any(word in text for word in ("skill", "skills", "learn", "learning", "certification", "certificate", "roadmap")):
-        topic_skills = ", ".join(SKILLS_BY_THEME[primary][:3]) if not question_careers else "a beginner course, one practical project, a portfolio/evidence folder, and feedback from someone in the field"
+        specific_skills = specific_skills_for_question(text)
+        topic_skills = ", ".join(specific_skills or SKILLS_BY_THEME[primary][:3])
         return f"For {focus}, build these first: {topic_skills}. Choose one beginner course, complete one small project or activity, and save proof of your work. That is more valuable than collecting certificates without practice."
     if any(word in text for word in ("resume", "cv", "interview", "portfolio", "linkedin")):
         return "Keep your resume to one clear page: education, relevant skills, projects/activities, achievements, and contact details. For interviews, prepare a 30-second introduction and two examples that show a skill, challenge, action, and result. Tailor both to the role you apply for."
