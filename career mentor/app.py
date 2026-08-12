@@ -354,9 +354,11 @@ def init_state() -> None:
 
 
 def log_out() -> None:
-    """Clear this browser-session profile and return to the sign-in screen."""
+    """Clear the active profile but retain browser-only demo accounts for login."""
+    local_accounts = st.session_state.get("local_demo_accounts", {})
     for key in list(st.session_state.keys()):
         del st.session_state[key]
+    st.session_state.local_demo_accounts = local_accounts
     st.session_state.app_stage = "login"
     st.session_state.auth_mode = "create"
     st.session_state.light_mode = False
@@ -542,6 +544,27 @@ def post_json(url: str, payload: dict[str, object], action: str) -> tuple[dict[s
 
 def auth_post(endpoint: str, payload: dict[str, str]) -> tuple[dict[str, object] | None, str]:
     return post_json(f"{auth_api_url()}/{endpoint}", payload, "Authentication")
+
+
+def backend_unavailable(error: str) -> bool:
+    """True only for a network failure, never for a rejected password/account."""
+    return error.startswith("Could not reach the authentication backend")
+
+
+def local_demo_account(email: str, name: str = "") -> dict[str, str]:
+    """Create a browser-only account for the free public Streamlit demo."""
+    accounts = st.session_state.setdefault("local_demo_accounts", {})
+    key = email.strip().lower()
+    if name:
+        account = {
+            "student_id": f"demo-{abs(hash(key))}",
+            "name": name.strip().title(),
+            "email": key,
+        }
+        accounts[key] = account
+        return account
+    saved = accounts.get(key)
+    return saved if isinstance(saved, dict) else {}
 
 
 def fetch_scores_and_insights(student_id: str) -> tuple[list[dict[str, object]], dict[str, object], str]:
@@ -1013,9 +1036,21 @@ def render_login() -> None:
                     payload["name"] = display_name.strip().title()
                 with st.spinner("Setting up your account…"):
                     account, error = auth_post(endpoint, payload)
-                if error:
+                if error and backend_unavailable(error):
+                    # Streamlit Community Cloud cannot call a server on the
+                    # developer's laptop.  Keep the public demo useful even
+                    # before an online API is deployed.
+                    if creating_account:
+                        account = local_demo_account(clean_email, display_name)
+                        st.info("Free demo mode: your account works in this browser. Your quiz results stay private to this session.")
+                    else:
+                        account = local_demo_account(clean_email)
+                        if not account:
+                            st.error("No browser-only demo account was found for this email. Please create an account first.")
+                elif error:
                     st.error(error)
-                else:
+
+                if account:
                     st.session_state.student_name = str(account["name"])
                     st.session_state.student_email = str(account["email"])
                     student_id = account.get("student_id")
@@ -1025,9 +1060,8 @@ def render_login() -> None:
                             "name": st.session_state.student_name,
                             "email": st.session_state.student_email,
                         }
-                        st.session_state.app_stage = "dashboard"
-                    else:
-                        st.session_state.app_stage = "welcome"
+                    # New accounts take the quiz; login can resume the dashboard.
+                    st.session_state.app_stage = "welcome" if creating_account else "dashboard"
                     st.rerun()
         switch_label = "Already have an account? Log in" if creating_account else "New to Career AI? Create an account"
         if st.button(switch_label, use_container_width=True, key="switch_auth_mode"):
