@@ -243,6 +243,46 @@ INTAKE_THEME_KEYWORDS = {
     "C": ("organise", "organize", "plan", "detail", "account", "spreadsheet", "system", "structure", "admin", "logistics", "records"),
 }
 
+# Direct mentions in the written career quiz should be stronger evidence than a
+# generic category. These careers appear before broader RIASEC suggestions.
+# The complete job directory remains available in Explore Careers.
+DIRECT_CAREER_KEYWORDS = {
+    "acting": ("Actor", "Theatre Artist", "Film Maker"), "actor": ("Actor", "Theatre Artist"), "theatre": ("Theatre Artist", "Actor"), "drama": ("Actor", "Theatre Artist"),
+    "film": ("Film Maker", "Video Editor", "Screenwriter"), "music": ("Musician", "Music Producer", "Sound Engineer"), "dance": ("Dancer", "Choreographer", "Dance Teacher"),
+    "fashion": ("Fashion Designer", "Fashion Stylist", "Textile Designer"), "photography": ("Photographer", "Photojournalist", "Visual Artist"),
+    "animation": ("Animator", "Game Designer", "Illustrator"), "game": ("Game Designer", "Game Developer", "Animator"),
+    "writing": ("Writer", "Journalist", "Content Strategist"), "writer": ("Writer", "Technical Writer", "Journalist"),
+    "design": ("UX Designer", "Graphic Designer", "Product Designer"), "art": ("Graphic Designer", "Illustrator", "Visual Artist"),
+    "coding": ("Software Engineer", "Front-End Developer", "Back-End Developer"), "programming": ("Software Engineer", "Full-Stack Developer", "Mobile App Developer"),
+    "software": ("Software Engineer", "Full-Stack Developer", "Cloud Engineer"), "cybersecurity": ("Cybersecurity Analyst", "Penetration Tester / Ethical Hacker", "Information Security Manager"),
+    "ai": ("Machine Learning Engineer", "AI Research Scientist", "Data Scientist"), "data": ("Data Analyst", "Data Scientist", "Data Engineer"),
+    "robot": ("Robotics Engineer", "Robotics Software Engineer", "Mechatronics Engineer"),
+    "doctor": ("Physician", "Surgeon", "Healthcare Professional"), "medicine": ("Physician", "Clinical Researcher", "Pharmacist"), "nurse": ("Nurse", "Healthcare Professional", "Nurse Practitioner"),
+    "psychology": ("Psychologist", "Counsellor", "Clinical Psychologist"), "therapy": ("Psychologist", "Speech Therapist", "Occupational Therapist"),
+    "teacher": ("Teacher", "Education Consultant", "Corporate Trainer"), "education": ("Teacher", "Education Consultant", "School Counsellor"),
+    "law": ("Lawyer", "Legal Advisor", "Policy Analyst"), "lawyer": ("Lawyer", "Corporate Lawyer", "Legal Advisor"),
+    "business": ("Entrepreneur", "Business Analyst", "Management Consultant"), "entrepreneur": ("Entrepreneur", "Business Development Manager", "Product Manager"),
+    "marketing": ("Marketing Manager", "Brand Manager", "Public Relations Specialist"), "finance": ("Financial Analyst", "Investment Banker", "Accountant"),
+    "accounting": ("Accountant", "Auditor (Internal/External)", "Financial Analyst"), "economics": ("Economist", "Financial Analyst", "Policy Analyst"),
+    "engineering": ("Mechanical Engineer", "Civil Engineer", "Electrical Engineer"), "architecture": ("Architect", "Urban Planner", "Interior Designer"),
+    "environment": ("Environmental Scientist", "Sustainability Consultant", "Conservation Scientist"), "science": ("Research Scientist", "Biotechnologist", "Laboratory Technician"),
+    "sports": ("Sports Coach", "Sports Psychologist", "Physiotherapist"), "cricket": ("Cricketer", "Sports Coach", "Sports Journalist"),
+    "chef": ("Chef", "Food Scientist", "Restaurant Manager"), "travel": ("Travel Consultant", "Hotel Manager", "Tourism Manager"),
+    "pilot": ("Pilot", "Aerospace Engineer", "Air Traffic Controller"),
+    "social work": ("Social Worker", "Community Manager", "Nonprofit Director"), "politics": ("Policy Analyst", "Diplomat", "Public Relations Specialist"),
+}
+
+CAREER_FIELD_SIGNALS = {
+    "acting": ("Media", "Arts"), "theatre": ("Media", "Arts"), "film": ("Media", "Arts"), "music": ("Media", "Arts"), "dance": ("Media", "Arts"),
+    "fashion": ("Arts", "Design"), "photography": ("Arts", "Media"), "animation": ("Arts", "Media"), "game": ("Technology", "Media"), "design": ("Arts", "Design"), "writing": ("Writing", "Media"),
+    "coding": ("Technology",), "programming": ("Technology",), "software": ("Technology",), "cybersecurity": ("Technology",), "data": ("Technology", "Science"), "ai": ("Technology", "Science"), "robot": ("Engineering", "Technology"),
+    "doctor": ("Healthcare", "Medicine"), "medicine": ("Healthcare", "Medicine"), "nurse": ("Healthcare",), "psychology": ("Healthcare", "Social Services"), "therapy": ("Healthcare", "Social Services"),
+    "teacher": ("Education",), "education": ("Education",), "law": ("Law",), "business": ("Business",), "marketing": ("Marketing", "Business"), "finance": ("Business", "Finance"), "accounting": ("Business", "Finance"),
+    "engineering": ("Engineering", "Technology"), "architecture": ("Engineering", "Arts"), "environment": ("Environment", "Science"), "science": ("Science", "Research"),
+    "sports": ("Sports", "Healthcare"), "cricket": ("Sports",), "chef": ("Hospitality",), "travel": ("Hospitality", "Tourism"), "pilot": ("Transportation", "Engineering"),
+    "social work": ("Social Services",), "politics": ("Government", "Public Policy"),
+}
+
 
 def load_job_catalog() -> dict[str, tuple[str, ...]]:
     """Read the full user-provided job catalogue, organised by category."""
@@ -830,16 +870,17 @@ def save_profile_to_backend() -> tuple[dict[str, object] | None, str]:
 
 
 def career_suggestions() -> tuple[str, ...]:
-    if not st.session_state.personality_complete:
-        ranked = active_theme_ranking()
-        # Avoid arbitrary results when the learner has not written any answers yet.
-        if not any(intake_theme_scores().values()):
-            return CAREER_CATALOG[:5]
-        code = "".join(ranked[:2])
-        return CAREER_MAP.get(code) or CAREER_MAP.get(code[::-1]) or CAREER_MAP[ranked[0]]
     ranked = active_theme_ranking()
     code = "".join(ranked[:2])
-    return CAREER_MAP.get(code) or CAREER_MAP.get(code[::-1]) or CAREER_MAP[ranked[0]]
+    theme_careers = CAREER_MAP.get(code) or CAREER_MAP.get(code[::-1]) or CAREER_MAP[ranked[0]]
+    written_answers = " ".join(str(answer).lower() for answer in st.session_state.intake_answers.values())
+    direct: list[str] = []
+    # Check longest phrases first so "social work" is not lost inside another match.
+    for keyword in sorted(DIRECT_CAREER_KEYWORDS, key=len, reverse=True):
+        if re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", written_answers):
+            direct.extend(DIRECT_CAREER_KEYWORDS[keyword])
+    # Do not show unexplained defaults ahead of explicitly written interests.
+    return tuple(dict.fromkeys(direct + list(theme_careers)))
 
 
 def relevant_career_results() -> tuple[dict[str, object], ...]:
@@ -852,14 +893,16 @@ def relevant_career_results() -> tuple[dict[str, object], ...]:
     ranked = active_theme_ranking()
     primary, secondary = ranked[:2]
     careers = career_suggestions()[:5]
+    written_answers = " ".join(str(answer).lower() for answer in st.session_state.intake_answers.values())
     results: list[dict[str, object]] = []
     for position, career in enumerate(careers):
         themes = CAREER_THEME_CODES.get(career, (primary,))
-        alignment = 94 if primary in themes and secondary in themes else 90 if primary in themes else 78
+        direct_match = any(career in options and re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", written_answers) for keyword, options in DIRECT_CAREER_KEYWORDS.items())
+        alignment = 97 if direct_match else 94 if primary in themes and secondary in themes else 90 if primary in themes else 78
         results.append({
             "career": career,
             "score": max(60, alignment - position * 3),
-            "reason": f"Matches your strongest themes: {RIASEC[primary][0]} and {RIASEC[secondary][0]}.",
+            "reason": "Directly matches an interest you wrote in your quiz." if direct_match else f"Matches your strongest themes: {RIASEC[primary][0]} and {RIASEC[secondary][0]}.",
         })
     return tuple(results)
 
@@ -904,35 +947,21 @@ def university_recommendations() -> tuple[dict[str, str], ...]:
         "Enterprising": ("Business", "Marketing", "Law", "Government", "Real Estate", "Retail", "Freelance"),
         "Conventional": ("Business", "Technology", "Manufacturing", "Transportation", "Retail"),
     }
-    career_field_keywords = {
-        "software": ("Technology",), "data": ("Technology", "Science"), "cybersecurity": ("Technology",),
-        "actor": ("Media", "Arts"), "theatre": ("Media", "Arts"), "ux": ("Arts", "Technology"), "designer": ("Arts", "Design"), "animator": ("Arts", "Media"),
-        "film": ("Media", "Arts"), "fashion": ("Arts", "Design"), "writer": ("Writing", "Media"),
-        "psycholog": ("Healthcare", "Social Services"), "teacher": ("Education",), "nurse": ("Healthcare",),
-        "physician": ("Healthcare",), "therapist": ("Healthcare", "Social Services"), "lawyer": ("Law",),
-        "business": ("Business",), "entrepreneur": ("Business",), "marketing": ("Marketing", "Business"),
-        "engineer": ("Engineering", "Technology"), "scientist": ("Science", "Research"),
-        "environment": ("Environment", "Science"), "architect": ("Engineering", "Arts"),
-        "accountant": ("Business", "Finance"), "financial": ("Business", "Finance"),
-    }
-    career_keywords = tuple(
-        keyword for career in recommendation_career_text().split()
-        for keyword in career_field_keywords.get(career.lower(), ())
-    )
-    matching_fields = career_keywords or tuple(keyword for theme in themes for keyword in field_keywords[theme])
-    matches = [
-        university for university in UNIVERSITY_CATALOG
-        if any(keyword.lower() in university["field"].lower() for keyword in matching_fields)
+    written_answers = " ".join(str(answer).lower() for answer in st.session_state.intake_answers.values())
+    direct_fields = [
+        field for keyword, fields in CAREER_FIELD_SIGNALS.items()
+        if re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", written_answers)
+        for field in fields
     ]
-    # Surface choices belonging to the highest-scoring theme first, then fill
-    # any remaining cards with the student's second strongest theme.
-    ordered_matches: list[dict[str, str]] = []
-    for theme in themes:
-        for university in UNIVERSITY_CATALOG:
-            if any(keyword.lower() in university["field"].lower() for keyword in field_keywords[theme]):
-                if university not in ordered_matches:
-                    ordered_matches.append(university)
-    return tuple((ordered_matches or matches or list(UNIVERSITY_CATALOG))[:3])
+    theme_fields = [field for theme in themes for field in field_keywords[theme]]
+    preferred_fields = tuple(dict.fromkeys(direct_fields + theme_fields))
+
+    def field_score(university: dict[str, str]) -> int:
+        field = university["field"].lower()
+        return sum(4 if signal in direct_fields else 1 for signal in preferred_fields if signal.lower() in field)
+
+    ranked_matches = sorted(UNIVERSITY_CATALOG, key=field_score, reverse=True)
+    return tuple((ranked_matches or list(UNIVERSITY_CATALOG))[:3])
 
 
 def recommendation_career_text() -> str:
@@ -947,17 +976,19 @@ def recommended_scholarships() -> tuple[dict[str, str], ...]:
     context = recommendation_career_text() + " " + themes + " " + " ".join(
         str(answer).lower() for answer in st.session_state.intake_answers.values()
     )
-    career_keywords = {
-        "technology": ("stem", "science", "engineering", "technology", "research"),
-        "software": ("stem", "science", "engineering", "technology"),
-        "data": ("stem", "science", "research"),
-        "design": ("art", "design", "creative", "arts"),
-        "psycholog": ("social", "health", "research"),
-        "environment": ("science", "environment", "research", "stem"),
-        "business": ("business", "leadership", "management"),
-        "entrepreneur": ("business", "leadership", "management"),
+    scholarship_signals = {
+        "stem": ("coding", "software", "data", "ai", "robot", "engineering", "science", "environment"),
+        "arts": ("acting", "actor", "theatre", "film", "music", "dance", "fashion", "photography", "animation", "design", "writing"),
+        "health": ("doctor", "medicine", "nurse", "psychology", "therapy"),
+        "business": ("business", "entrepreneur", "marketing", "finance", "accounting"),
+        "law": ("law", "lawyer", "politics"),
+        "sports": ("sports", "cricket"),
+        "education": ("teacher", "education", "social work"),
     }
-    keywords = tuple(keyword for key, values in career_keywords.items() if key in context for keyword in values)
+    keywords = tuple(
+        label for label, triggers in scholarship_signals.items()
+        if any(re.search(rf"(?<!\w){re.escape(trigger)}(?!\w)", context) for trigger in triggers)
+    )
     university_aid = [
         {
             "name": f"{university['name']} financial aid",
