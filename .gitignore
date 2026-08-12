@@ -3,6 +3,13 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Local macOS/editor files — never part of the Career AI website
+.DS_Store
+Visual Studio Code.app/
+VS Code
+Icon?
+UI Rough diagram.pages
+
 # C extensions
 *.so
 
