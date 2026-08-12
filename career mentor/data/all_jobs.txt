@@ -768,6 +768,219 @@ Falconer
 Horse Trainer
 Animal Trainer (Film/Circus)
 Ethical Hacker (Security)
+
+31. Additional Global Career Titles
+Software Developer
+Web Developer
+Mobile App Developer
+AI Engineer
+AI Researcher
+Cybersecurity Engineer
+Ethical Hacker
+Cloud Engineer
+Computer Technician
+Doctor
+Paramedic
+Emergency Medical Technician
+Physiotherapist
+Speech Therapist
+Medical Laboratory Scientist
+Biomedical Scientist
+Medical Researcher
+Public Health Specialist
+Medical Transcriptionist
+Geographer
+Neuroscientist
+Scientific Writer
+Railway Engineer
+Computer Engineer
+Telecommunications Engineer
+Banker
+Financial Advisor
+Stockbroker
+Investment Manager
+Risk Analyst
+Business Consultant
+Chief Executive Officer
+Chief Financial Officer
+Logistics Manager
+Public Defender
+Criminal Lawyer
+Tax Lawyer
+Patent Lawyer
+Politician
+Political Scientist
+Election Officer
+Criminal Investigator
+Fire Inspector
+Emergency Dispatcher
+Security Guard
+Security Manager
+Cybersecurity Specialist
+Border Patrol Officer
+Disaster Management Specialist
+2D Animator
+3D Animator
+Character Designer
+Filmmaker
+Ceramic Artist
+Set Designer
+Actress
+Songwriter
+DJ
+Reporter
+Content Writer
+YouTuber
+Podcaster
+Streamer
+Influencer
+Television Presenter
+Preschool Teacher
+Elementary School Teacher
+High School Teacher
+College Professor
+Vice Principal
+Teaching Assistant
+Curriculum Designer
+Archivist
+Education Administrator
+Online Teacher
+Construction Manager
+Bricklayer
+Mason
+Tiler
+Quantity Surveyor
+Interior Installer
+Automotive Mechanic
+Elevator Technician
+Sailor
+Marine Pilot
+Train Driver
+Taxi Driver
+Transportation Planner
+Automotive Technician
+Farmer
+Agricultural Scientist
+Florist
+Gardener
+Landscaper
+Animal Breeder
+Fisheries Scientist
+Aquaculture Specialist
+Agricultural Technician
+Veterinary Nurse
+Dog Trainer
+Pet Groomer
+Animal Behaviorist
+Marine Animal Trainer
+Zookeeper
+Wildlife Conservationist
+Animal Shelter Worker
+Pet Sitter
+Dog Walker
+Equine Trainer
+Horse Breeder
+Chocolatier
+Hotel Receptionist
+Event Manager
+Travel Writer
+Travel Photographer
+Tourism Researcher
+Destination Manager
+Adventure Guide
+Family Therapist
+Rehabilitation Counselor
+Community Outreach Worker
+Mental Health Counselor
+Addiction Counselor
+Human Services Specialist
+Sports Physiotherapist
+Sports Nutritionist
+Sports Scout
+Sports Journalist
+Sports Photographer
+Gym Manager
+Strength and Conditioning Coach
+Bank Manager
+Mortgage Advisor
+Financial Planner
+Investment Analyst
+Financial Controller
+Tax Accountant
+Insurance Broker
+Treasury Analyst
+Fraud Analyst
+Marketing Specialist
+Digital Marketer
+SEM Specialist
+Product Marketer
+Advertising Manager
+Communications Manager
+Market Researcher
+Influencer Marketing Manager
+Bicycle Mechanic
+Appliance Repair Technician
+Computer Repair Technician
+Phone Repair Technician
+Jeweler
+Marine Mechanic
+Customer Support Specialist
+Video Editor
+Crime Scene Investigator
+Forensic Anthropologist
+Esports Coach
+Theme Park Designer
+Escape Room Designer
+Ethical AI Specialist
+Drone Pilot
+Prop Maker
+Sound Designer
+Museum Conservator
+Cryptozoology Researcher
+Perfumer
+Gemologist
+Storm Chaser
+Space Scientist
+Underwater Archaeologist
+Wildlife Photographer
+Funeral Director
+Cemetery Manager
+Appraiser
+Professional Interpreter
+Climate Scientist
+Solar Energy Technician
+Wind Energy Technician
+Conservation Scientist
+Marine Conservationist
+Forestry Specialist
+Water Resources Specialist
+Environmental Policy Analyst
+Satellite Engineer
+Rocket Engineer
+Spacecraft Engineer
+Mission Control Specialist
+Flight Controller
+Satellite Communications Engineer
+Planetary Scientist
+Space Medicine Specialist
+Nuclear Reactor Operator
+Nuclear Physicist
+Cryptographer
+Quantitative Analyst
+Patent Examiner
+Sign Language Interpreter
+Prosthetist
+Orthotist
+Sleep Technologist
+Forensic Accountant
+Ethical AI Auditor
+Cloud Security Engineer
+Semiconductor Engineer
+Battery Engineer
+Autonomous Vehicle Engineer
+Drone Engineer
+3D Printing Specialist
+Nanotechnology Engineer
 UX Writer
 Color Consultant
 Feng Shui Consultant
