@@ -948,6 +948,12 @@ def university_recommendations() -> tuple[dict[str, str], ...]:
         "Conventional": ("Business", "Technology", "Manufacturing", "Transportation", "Retail"),
     }
     written_answers = " ".join(str(answer).lower() for answer in st.session_state.intake_answers.values())
+    preferred_countries = {
+        "us": "USA", "usa": "USA", "united states": "USA", "uk": "UK", "united kingdom": "UK",
+        "india": "India", "canada": "Canada", "australia": "Australia", "germany": "Germany",
+        "singapore": "Singapore", "japan": "Japan", "france": "France", "switzerland": "Switzerland",
+    }
+    country_choices = tuple(country for phrase, country in preferred_countries.items() if re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", written_answers))
     direct_fields = [
         field for keyword, fields in CAREER_FIELD_SIGNALS.items()
         if re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", written_answers)
@@ -958,7 +964,9 @@ def university_recommendations() -> tuple[dict[str, str], ...]:
 
     def field_score(university: dict[str, str]) -> int:
         field = university["field"].lower()
-        return sum(4 if signal in direct_fields else 1 for signal in preferred_fields if signal.lower() in field)
+        subject_score = sum(4 if signal in direct_fields else 1 for signal in preferred_fields if signal.lower() in field)
+        country_score = 8 if university["country"] in country_choices else 0
+        return country_score + subject_score
 
     ranked_matches = sorted(UNIVERSITY_CATALOG, key=field_score, reverse=True)
     return tuple((ranked_matches or list(UNIVERSITY_CATALOG))[:3])
@@ -1042,6 +1050,11 @@ def is_meaningful_answer(answer: str) -> bool:
     if cleaned in {"yes", "no", "y", "n", "true", "false", "maybe"}:
         return True
     if re.fullmatch(r"[+-]?\d+(?:\.\d+)?\s*%?", cleaned):
+        return True
+    # Short country abbreviations (US, UK, UAE, etc.) are valid answers to
+    # the university-location question. The repeated-letter check still blocks
+    # obvious placeholders such as "aaa".
+    if re.fullmatch(r"[a-z]{2,3}", cleaned):
         return True
     if len(cleaned) < 3 or (letters and len(set(letters)) == 1):
         return False
