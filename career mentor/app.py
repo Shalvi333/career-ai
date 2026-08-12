@@ -993,8 +993,11 @@ def university_recommendations() -> tuple[dict[str, str], ...]:
 
     def field_score(university: dict[str, str]) -> int:
         field = university["field"].lower()
-        subject_score = sum(4 if signal in direct_fields else 1 for signal in preferred_fields if signal.lower() in field)
-        country_score = 8 if university["country"] in country_choices else 0
+        # The subject/career must come first. Country is only a tie-breaker:
+        # an acting student who writes "US" should get US film/arts options,
+        # not an unrelated US business university.
+        subject_score = sum(20 if signal in direct_fields else 2 for signal in preferred_fields if signal.lower() in field)
+        country_score = 3 if university["country"] in country_choices else 0
         return country_score + subject_score
 
     ranked_matches = sorted(UNIVERSITY_CATALOG, key=field_score, reverse=True)
@@ -1255,10 +1258,13 @@ def render_intake_results() -> None:
     render_theme_toggle()
     answered = sum(bool(value.strip()) for value in st.session_state.intake_answers.values())
     total = len(intake_questions())
-    st.markdown("<div class='top-title'>Your Career Profile is Ready</div><div class='top-subtitle'>Here is your first overall summary. Complete a personality quiz next for a deeper career-fit view.</div>", unsafe_allow_html=True)
+    first_matches = relevant_career_results()[:3]
+    first_careers = ", ".join(match_title(match) for match in first_matches)
+    st.markdown("<div class='top-title'>Your Career Profile is Ready</div><div class='top-subtitle'>Your recommendations below are already based on the answers you wrote. The RIASEC quiz is optional and only refines them further.</div>", unsafe_allow_html=True)
     stat1, stat2, stat3 = st.columns(3)
     for col, icon, number, label in ((stat1, "🦋", f"{answered}/{total}", "Questions answered"), (stat2, "🧭", "Career profile", "Saved in this session"), (stat3, "🧠", "Next: personality", "Refine your matches")):
         with col: st.markdown(f"<div class='panel' style='text-align:center'><div class='icon-bubble' style='margin:auto'>{icon}</div><div class='result-number'>{number}</div><p class='muted'>{label}</p></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='panel' style='margin-top:18px'><h3>Your first personalised career matches</h3><p class='mint'>{escape(first_careers)}</p><p class='muted'>Chosen from the interests you entered in the career quiz.</p></div>", unsafe_allow_html=True)
     st.markdown("<h2 style='margin-top:28px'>Refine your results with a RIASEC personality quiz</h2><p class='muted'>Choose one version. Both provide a Holland Code and career-family suggestions.</p>", unsafe_allow_html=True)
     short, long = st.columns(2, gap="large")
     with short:
@@ -1267,7 +1273,7 @@ def render_intake_results() -> None:
     with long:
         st.markdown("<div class='choice-card'><div class='choice-icon'>🧠</div><h2>Full RIASEC Quiz</h2><p class='muted'>60 statements measuring Realistic, Investigative, Artistic, Social, Enterprising, and Conventional themes.</p><p class='accent'>About 15–20 minutes</p></div>", unsafe_allow_html=True)
         st.button("Start full personality quiz  →", use_container_width=True, on_click=start_personality, args=("riasec_long",))
-    if st.button("Skip for now and open dashboard", use_container_width=True):
+    if st.button("Open my personalised dashboard  →", use_container_width=True):
         st.session_state.app_stage = "dashboard"
         st.rerun()
 
