@@ -636,30 +636,42 @@ def local_demo_account(email: str, name: str = "") -> dict[str, str]:
     return saved if isinstance(saved, dict) else {}
 
 
+def direct_careers_from_text(text: str) -> tuple[str, ...]:
+    """Return careers explicitly connected to words in a question or quiz."""
+    found: list[str] = []
+    for keyword in sorted(DIRECT_CAREER_KEYWORDS, key=len, reverse=True):
+        if re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", text.lower()):
+            found.extend(DIRECT_CAREER_KEYWORDS[keyword])
+    return tuple(dict.fromkeys(found))
+
+
 def built_in_mentor_reply(question: str) -> str:
-    """Give useful career guidance in the free public app without an LLM/API."""
+    """Give question-aware career guidance in the free public app without an LLM/API."""
     text = question.lower()
-    careers = career_suggestions()[:3]
+    question_careers = direct_careers_from_text(text)
+    careers = question_careers[:3] or career_suggestions()[:3]
     ranked = active_theme_ranking()
     primary = ranked[0]
     strengths = ", ".join(SKILLS_BY_THEME[primary][:3])
-    universities = university_recommendations()[:3]
-    scholarships = recommended_scholarships()[:3]
+    universities = university_recommendations(text)[:3]
+    scholarships = recommended_scholarships(text)[:3]
+    focus = ", ".join(careers)
 
     if any(word in text for word in ("scholarship", "financial aid", "funding", "fee", "afford")):
         options = "; ".join(item["name"] for item in scholarships)
-        return f"For your current profile, start by checking: {options}. Also visit each university's official financial-aid page, note eligibility and deadlines, and prepare your marksheets, activity list, and income documents early."
+        return f"For {focus}, start by checking: {options}. These are starting points, so always verify eligibility and deadlines on the official provider or university website. Prepare your marksheets, activity list, and income documents early."
     if any(word in text for word in ("university", "universities", "college", "colleges", "campus", "admission", "apply")):
         options = "; ".join(f"{item['name']} ({item['field']})" for item in universities)
-        return f"Based on your interests, good places to research first are: {options}. Compare the course curriculum, location, entry requirements, total cost, scholarships, and placement/internship opportunities before applying."
+        return f"For {focus}, good places to research first are: {options}. Compare the curriculum, location, entry requirements, total cost, scholarships, and internship opportunities before applying. You can also use the Universities Worldwide page to search the live global directory by country or institution name."
     if any(word in text for word in ("skill", "skills", "learn", "learning", "certification", "certificate", "roadmap")):
-        return f"Your strongest direction currently is {RIASEC[primary][0]} work. Build these first: {strengths}. Choose one beginner course, make one small project, and add it to a portfolio or evidence folder. That is more valuable than collecting many certificates without practice."
+        topic_skills = ", ".join(SKILLS_BY_THEME[primary][:3]) if not question_careers else "a beginner course, one practical project, a portfolio/evidence folder, and feedback from someone in the field"
+        return f"For {focus}, build these first: {topic_skills}. Choose one beginner course, complete one small project or activity, and save proof of your work. That is more valuable than collecting certificates without practice."
     if any(word in text for word in ("resume", "cv", "interview", "portfolio", "linkedin")):
         return "Keep your resume to one clear page: education, relevant skills, projects/activities, achievements, and contact details. For interviews, prepare a 30-second introduction and two examples that show a skill, challenge, action, and result. Tailor both to the role you apply for."
     if any(word in text for word in ("course", "degree", "subject", "subjects", "stream", "major", "study")):
-        return f"For your profile, explore courses connected to {', '.join(careers)}. Open each course syllabus and look for modules you genuinely enjoy. A good choice balances interest, your current strengths, entry requirements, and the kind of day-to-day work you want."
+        return f"For {focus}, explore courses connected to those careers. Open each course syllabus and look for modules you genuinely enjoy. A good choice balances interest, your strengths, entry requirements, and the day-to-day work you want."
     if any(word in text for word in ("career", "job", "profession", "work", "role", "future", "coding", "design", "acting", "doctor", "engineer", "business", "psychology", "writer", "artist")):
-        return f"Your current profile suggests these paths: {', '.join(careers)}. To choose between them, try one small real activity for each—such as a project, club, shadowing opportunity, short course, or conversation with someone in that field—and notice which work you keep wanting to return to."
+        return f"Relevant paths for your question are: {focus}. To choose between them, try one small real activity for each—such as a project, club, shadowing opportunity, short course, or conversation with someone in that field—and notice which work you keep wanting to return to."
     return "I’m here for career and education guidance. Ask me about careers, courses, skills, universities, scholarships, resumes, interviews, or a learning roadmap, and I’ll help you plan the next step."
 
 
@@ -962,8 +974,8 @@ def personalized_roadmap_steps() -> tuple[dict[str, object], ...]:
     )
 
 
-def university_recommendations() -> tuple[dict[str, str], ...]:
-    """Match university fields to the student's strongest RIASEC themes."""
+def university_recommendations(extra_context: str = "") -> tuple[dict[str, str], ...]:
+    """Match universities to quiz interests, with optional mentor-question context."""
     ranked = active_theme_ranking()
     # Keep the ranking order: using a set here made equally rated themes appear
     # in an unpredictable order and led to the same three default suggestions.
@@ -976,7 +988,7 @@ def university_recommendations() -> tuple[dict[str, str], ...]:
         "Enterprising": ("Business", "Marketing", "Law", "Government", "Real Estate", "Retail", "Freelance"),
         "Conventional": ("Business", "Technology", "Manufacturing", "Transportation", "Retail"),
     }
-    written_answers = " ".join(str(answer).lower() for answer in st.session_state.intake_answers.values())
+    written_answers = " ".join(str(answer).lower() for answer in st.session_state.intake_answers.values()) + " " + extra_context.lower()
     preferred_countries = {
         "us": "USA", "usa": "USA", "united states": "USA", "uk": "UK", "united kingdom": "UK",
         "india": "India", "canada": "Canada", "australia": "Australia", "germany": "Germany",
@@ -1009,13 +1021,13 @@ def recommendation_career_text() -> str:
     return " ".join(match_title(match).lower() for match in displayed_career_matches())
 
 
-def recommended_scholarships() -> tuple[dict[str, str], ...]:
-    """Rank scholarships against the student's matched careers and profile themes."""
+def recommended_scholarships(extra_context: str = "") -> tuple[dict[str, str], ...]:
+    """Rank scholarships against the profile and optional mentor-question context."""
     ranked = active_theme_ranking()
     themes = " ".join(RIASEC[code][0].lower() for code in ranked[:2])
     context = recommendation_career_text() + " " + themes + " " + " ".join(
         str(answer).lower() for answer in st.session_state.intake_answers.values()
-    )
+    ) + " " + extra_context.lower()
     scholarship_signals = {
         "stem": ("coding", "software", "data", "ai", "robot", "engineering", "science", "environment"),
         "arts": ("acting", "actor", "theatre", "film", "music", "dance", "fashion", "photography", "animation", "design", "writing"),
@@ -1036,7 +1048,7 @@ def recommended_scholarships() -> tuple[dict[str, str], ...]:
             "coverage": university["scholarships"],
             "best_for": f"{university['field']} · {university['country']}",
         }
-        for university in university_recommendations()
+        for university in university_recommendations(extra_context)
     ]
     if not keywords:
         return tuple(university_aid + list(SCHOLARSHIP_CATALOG[:2]))
@@ -1443,7 +1455,7 @@ def render_ai_mentor() -> None:
         question = st.text_input("Ask your question", placeholder="Which skills should I build for UX design?")
         asked = st.form_submit_button("Ask AI Mentor  →", use_container_width=True)
     if asked and question.strip():
-        career_words = ("career", "job", "course", "college", "university", "skill", "scholarship", "internship", "study", "degree", "subject", "resume", "interview", "education", "profession")
+        career_words = ("career", "job", "course", "college", "university", "skill", "scholarship", "internship", "study", "degree", "subject", "resume", "interview", "education", "profession", *DIRECT_CAREER_KEYWORDS.keys())
         is_career_question = any(word in question.lower() for word in career_words)
         if not is_career_question:
             reply = "I’m here to help with career and education guidance. Please ask me about careers, courses, skills, universities, scholarships, internships, or study plans."
