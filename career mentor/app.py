@@ -495,6 +495,11 @@ def reset_quiz(mode: str) -> None:
     st.session_state.app_stage = "intake"
 
 
+def open_ai_mentor() -> None:
+    """Safe callback: sidebar widgets cannot be changed after they render."""
+    st.session_state.nav_page = "AI Mentor"
+
+
 def start_personality(mode: str) -> None:
     st.session_state.personality_mode = mode
     st.session_state.personality_index = 0
@@ -1492,7 +1497,7 @@ def render_dashboard() -> None:
             with logo: st.image(LOGO_PATH, use_container_width=True)
             st.markdown("**Ask your AI Mentor**")
             st.caption("Career and education guidance whenever you need it.")
-            if st.button("Start a conversation", use_container_width=True): st.session_state.nav_page = "AI Mentor"; st.rerun()
+            st.button("Start a conversation", use_container_width=True, on_click=open_ai_mentor)
     universities = university_recommendations()
     scholarships = recommended_scholarships()
     left, middle, right = st.columns(3, gap="medium")
