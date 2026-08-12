@@ -1,0 +1,783 @@
+1. Business, Management & Finance
+Chief Executive Officer (CEO)
+Chief Financial Officer (CFO)
+Chief Operating Officer (COO)
+Chief Marketing Officer (CMO)
+Management Consultant
+Business Analyst
+Operations Manager
+Project Manager
+Product Manager
+Human Resources Manager
+Recruiter / Talent Acquisition Specialist
+Compensation & Benefits Analyst
+Investment Banker
+Financial Analyst
+Financial Planner / Advisor
+Accountant
+Certified Public Accountant (CPA)
+Auditor (Internal/External)
+Actuary
+Tax Consultant
+Bookkeeper
+Payroll Specialist
+Budget Analyst
+Credit Analyst
+Loan Officer
+Bank Teller
+Branch Manager (Banking)
+Stockbroker / Securities Trader
+Portfolio Manager
+Hedge Fund Manager
+Private Equity Associate
+Venture Capitalist
+Risk Manager
+Compliance Officer
+Insurance Underwriter
+Insurance Claims Adjuster
+Actuarial Analyst
+Economist
+Supply Chain Manager
+Procurement Specialist
+Purchasing Agent
+Business Development Manager
+Franchise Owner/Operator
+Entrepreneur / Startup Founder
+Small Business Owner
+Corporate Strategist
+Management Trainee
+Office Manager
+Executive Assistant
+Administrative Assistant
+2. Technology, IT & Computer Science
+Software Engineer
+Front-End Developer
+Back-End Developer
+Full-Stack Developer
+Mobile App Developer (iOS/Android)
+Game Developer
+Game Designer
+Embedded Systems Engineer
+DevOps Engineer
+Site Reliability Engineer (SRE)
+Cloud Architect
+Cloud Engineer (AWS/Azure/GCP)
+Systems Administrator
+Network Engineer
+Network Architect
+Database Administrator
+Data Engineer
+Data Scientist
+Data Analyst
+Machine Learning Engineer
+AI Research Scientist
+Computer Vision Engineer
+NLP Engineer
+Robotics Software Engineer
+Cybersecurity Analyst
+Penetration Tester / Ethical Hacker
+Information Security Manager
+IT Support Specialist / Help Desk Technician
+QA Engineer / Software Tester
+UX Designer
+UI Designer
+UX Researcher
+Product Designer
+Technical Writer
+Solutions Architect
+Blockchain Developer
+Web3 / Smart Contract Developer
+IT Project Manager
+Scrum Master / Agile Coach
+Computer Hardware Engineer
+Firmware Engineer
+Chief Information Officer (CIO)
+Chief Technology Officer (CTO)
+IT Auditor
+ERP Consultant (SAP/Oracle)
+CRM Specialist (Salesforce, etc.)
+Digital Transformation Consultant
+3. Engineering (Non-Software)
+Civil Engineer
+Structural Engineer
+Mechanical Engineer
+Electrical Engineer
+Electronics Engineer
+Chemical Engineer
+Aerospace Engineer
+Aeronautical Engineer
+Industrial Engineer
+Manufacturing Engineer
+Materials Engineer
+Metallurgical Engineer
+Mining Engineer
+Petroleum Engineer
+Environmental Engineer
+Biomedical Engineer
+Biochemical Engineer
+Nuclear Engineer
+Marine Engineer
+Naval Architect
+Automotive Engineer
+Acoustical Engineer
+Agricultural Engineer
+Geotechnical Engineer
+Transportation Engineer
+Water Resources Engineer
+HVAC Engineer
+Fire Protection Engineer
+Robotics Engineer
+Mechatronics Engineer
+Control Systems Engineer
+Instrumentation Engineer
+Quality Assurance Engineer
+Safety Engineer
+Sound Engineer (Acoustics/Broadcast)
+Systems Engineer
+Process Engineer
+Reliability Engineer
+Plant Engineer
+Project Engineer
+4. Healthcare & Medicine
+Physician (General Practitioner)
+Surgeon
+Cardiologist
+Neurologist
+Oncologist
+Pediatrician
+Psychiatrist
+Radiologist
+Anesthesiologist
+Dermatologist
+Endocrinologist
+Gastroenterologist
+Obstetrician/Gynecologist
+Orthopedic Surgeon
+Ophthalmologist
+Urologist
+Pathologist
+Emergency Medicine Physician
+Family Medicine Doctor
+Nurse (Registered Nurse)
+Nurse Practitioner
+Licensed Practical Nurse
+Midwife
+Physician Assistant
+Dentist
+Orthodontist
+Dental Hygienist
+Dental Assistant
+Pharmacist
+Pharmacy Technician
+Physical Therapist
+Occupational Therapist
+Speech-Language Pathologist
+Respiratory Therapist
+Radiologic Technologist
+Medical Laboratory Technologist
+Phlebotomist
+Paramedic / EMT
+Optometrist
+Chiropractor
+Podiatrist
+Dietitian / Nutritionist
+Medical Social Worker
+Healthcare Administrator
+Hospital Manager
+Public Health Officer
+Epidemiologist
+Biostatistician
+Genetic Counselor
+Veterinarian
+Veterinary Technician
+Animal Groomer
+Medical Illustrator
+Clinical Research Coordinator
+Medical Coder / Biller
+Home Health Aide
+Nursing Assistant (CNA)
+Massage Therapist
+Acupuncturist
+Audiologist
+Prosthetist/Orthotist
+5. Science & Research
+Biologist
+Microbiologist
+Biochemist
+Geneticist
+Zoologist
+Botanist
+Marine Biologist
+Ecologist
+Chemist
+Physicist
+Astrophysicist
+Astronomer
+Geologist
+Geophysicist
+Meteorologist
+Climatologist
+Oceanographer
+Seismologist
+Volcanologist
+Paleontologist
+Anthropologist
+Archaeologist
+Forensic Scientist
+Toxicologist
+Pharmacologist
+Research Scientist (R&D)
+Lab Technician
+Science Communicator
+Science Journalist
+Museum Curator
+Materials Scientist
+Nanotechnologist
+Food Scientist
+Soil Scientist
+Hydrologist
+6. Education & Academia
+Preschool/Early Childhood Teacher
+Primary/Elementary School Teacher
+Secondary School Teacher
+Special Education Teacher
+ESL/Language Teacher
+University Professor
+Lecturer
+Academic Researcher
+School Principal
+School Counselor
+Educational Psychologist
+Curriculum Developer
+Instructional Designer
+Corporate Trainer
+Tutor
+Librarian
+School Administrator
+Admissions Officer
+Education Consultant
+Online Course Instructor
+Vocational Trainer
+Music Teacher
+Art Teacher
+Physical Education Teacher
+Driving Instructor
+Language Interpreter/Teacher Combo Roles
+7. Law, Legal Services & Public Policy
+Lawyer / Attorney
+Corporate Lawyer
+Criminal Defense Lawyer
+Prosecutor
+Judge
+Magistrate
+Paralegal
+Legal Secretary
+Notary Public
+Legal Consultant
+Patent Attorney
+Intellectual Property Lawyer
+Human Rights Lawyer
+Immigration Lawyer
+Mediator / Arbitrator
+Court Reporter
+Bailiff
+Legislative Aide
+Policy Analyst
+Diplomat / Foreign Service Officer
+Lobbyist
+Compliance Attorney
+Contract Manager
+8. Government, Public Service & Military
+Civil Servant
+City Mayor
+Governor
+Member of Parliament / Congress
+Public Administrator
+Urban Planner
+City Planner
+Diplomat / Ambassador
+Intelligence Analyst
+Customs Officer
+Immigration Officer
+Tax Collector
+Postal Worker
+Census Worker
+Army Officer
+Navy Officer
+Air Force Officer
+Infantry Soldier
+Military Pilot
+Military Engineer
+Intelligence Officer (Military)
+Police Officer
+Detective
+Forensic Investigator
+Firefighter
+Fire Chief
+Park Ranger
+Border Patrol Agent
+Coast Guard Officer
+Prison/Corrections Officer
+Probation Officer
+Emergency Management Director
+9. Arts, Design & Creative Fields
+Graphic Designer
+Illustrator
+Animator
+3D Artist / Modeler
+Concept Artist
+Fashion Designer
+Textile Designer
+Interior Designer
+Industrial/Product Designer
+Furniture Designer
+Jewelry Designer
+Set/Production Designer
+Costume Designer
+Painter
+Sculptor
+Ceramicist / Potter
+Printmaker
+Photographer
+Photojournalist
+Videographer
+Film Editor
+Cinematographer
+Art Director
+Creative Director
+Calligrapher
+Tattoo Artist
+Muralist
+Comic Book Artist
+Storyboard Artist
+Architect
+Landscape Architect
+Urban Designer
+10. Media, Entertainment & Performing Arts
+Actor
+Voice Actor
+Film Director
+Film Producer
+Screenwriter
+Playwright
+Novelist / Author
+Journalist
+News Anchor
+Broadcast Reporter
+Radio Host / DJ
+Podcast Producer
+Editor (Publishing)
+Copy Editor
+Proofreader
+Literary Agent
+Publicist
+Public Relations Specialist
+Social Media Manager
+Content Creator / Influencer
+YouTuber / Streamer
+Musician
+Singer
+Composer
+Music Producer
+Sound Engineer (Studio)
+DJ (Performance)
+Conductor
+Dancer
+Choreographer
+Comedian
+Stunt Performer
+Talent Agent
+Casting Director
+Makeup Artist (Film/TV)
+Special Effects Artist
+Puppeteer
+Circus Performer
+Theater Stage Manager
+Lighting Designer (Theater)
+Broadcast Technician
+Film Colorist
+Foley Artist
+11. Marketing, Advertising & Sales
+Marketing Manager
+Brand Manager
+Digital Marketing Specialist
+SEO Specialist
+SEM/PPC Specialist
+Content Marketer
+Email Marketing Specialist
+Market Research Analyst
+Advertising Executive
+Copywriter
+Media Buyer/Planner
+Sales Representative
+Sales Manager
+Account Executive
+Account Manager
+Retail Sales Associate
+Real Estate Agent
+Real Estate Broker
+Car Salesperson
+Insurance Agent
+Telemarketer
+Merchandiser
+E-commerce Manager
+Affiliate Marketing Manager
+Growth Hacker
+Public Relations Manager
+Event Marketing Coordinator
+12. Hospitality, Travel & Tourism
+Hotel Manager
+Front Desk Receptionist
+Concierge
+Housekeeping Staff
+Event Planner
+Wedding Planner
+Travel Agent
+Tour Guide
+Tour Operator
+Cruise Ship Staff
+Flight Attendant
+Resort Manager
+Restaurant Manager
+Chef / Head Chef
+Sous Chef
+Pastry Chef
+Line Cook
+Bartender
+Barista
+Sommelier
+Catering Manager
+Food Stylist
+Restaurant Host/Hostess
+Waiter / Server
+Theme Park Operations Staff
+Casino Dealer
+Spa Manager
+13. Food Production, Agriculture & Farming
+Farmer (Crop)
+Livestock Farmer
+Dairy Farmer
+Poultry Farmer
+Fisherman / Aquaculture Farmer
+Agronomist
+Horticulturist
+Viticulturist (Winemaking)
+Winemaker
+Brewer
+Food Technologist
+Agricultural Consultant
+Farm Manager
+Beekeeper
+Forester
+Landscape Gardener
+Nursery Worker
+Agricultural Equipment Operator
+Butcher
+Baker
+Cheesemaker
+Food Safety Inspector
+14. Skilled Trades & Construction
+Electrician
+Plumber
+Carpenter
+Mason / Bricklayer
+Welder
+HVAC Technician
+Roofer
+Painter (Construction)
+Drywall Installer
+Flooring Installer
+Glazier
+Locksmith
+Construction Worker
+Construction Site Supervisor
+General Contractor
+Heavy Equipment Operator
+Crane Operator
+Surveyor
+Building Inspector
+Elevator Installer/Technician
+Insulation Installer
+Scaffolder
+Ironworker / Steel Erector
+Demolition Worker
+Pipefitter
+Boilermaker
+Sheet Metal Worker
+Stonemason
+Tile Setter
+Cabinet Maker
+15. Manufacturing & Industrial Production
+Machinist
+CNC Operator
+Tool and Die Maker
+Assembly Line Worker
+Production Supervisor
+Factory Manager
+Quality Control Inspector
+Industrial Maintenance Technician
+Textile Worker
+Garment Worker
+Print Press Operator
+Warehouse Worker
+Forklift Operator
+Packaging Technician
+3D Printing Technician
+Foundry Worker
+Glassblower
+Woodworker
+16. Transportation & Logistics
+Commercial Airline Pilot
+Helicopter Pilot
+Air Traffic Controller
+Aircraft Mechanic
+Flight Dispatcher
+Ship Captain
+Merchant Marine / Sailor
+Ship's Engineer
+Port Operations Manager
+Truck Driver
+Bus Driver
+Taxi/Rideshare Driver
+Train Conductor
+Train Engineer / Locomotive Operator
+Subway Operator
+Delivery Driver
+Courier
+Logistics Coordinator
+Supply Chain Analyst
+Freight Broker
+Dispatcher
+Fleet Manager
+Traffic Controller (Ground)
+Toll Booth Operator
+Auto Mechanic
+Motorcycle Mechanic
+Diesel Mechanic
+Aircraft Maintenance Engineer
+17. Energy, Mining & Natural Resources
+Petroleum Engineer
+Oil Rig Worker (Roughneck)
+Refinery Operator
+Geologist (Energy Sector)
+Mining Engineer
+Miner
+Drilling Engineer
+Solar Panel Installer
+Wind Turbine Technician
+Hydroelectric Plant Operator
+Nuclear Plant Operator
+Power Plant Engineer
+Electrical Lineman
+Energy Analyst
+Renewable Energy Consultant
+Geothermal Technician
+Utility Worker
+18. Environment, Conservation & Sustainability
+Environmental Scientist
+Environmental Consultant
+Sustainability Manager
+Conservationist
+Wildlife Biologist
+Park Ranger
+Forestry Technician
+Recycling Coordinator
+Waste Management Specialist
+Climate Change Analyst
+Renewable Energy Engineer
+Environmental Lawyer
+Ecotourism Guide
+Wildlife Rehabilitator
+Zoo Keeper / Animal Curator
+Aquarist
+19. Social Services, Counseling & Community Work
+Social Worker
+Case Manager
+Counselor (Mental Health)
+Psychologist
+Marriage & Family Therapist
+Substance Abuse Counselor
+School Counselor
+Career Counselor
+Community Organizer
+Nonprofit Program Manager
+Nonprofit Executive Director
+Humanitarian Aid Worker
+Refugee Resettlement Officer
+Child Welfare Specialist
+Elder Care Coordinator
+Disability Support Worker
+Youth Worker
+Chaplain
+Religious Minister / Clergy
+Priest / Imam / Rabbi / Monk
+Missionary
+Life Coach
+20. Beauty, Personal Care & Wellness
+Hairstylist / Hairdresser
+Barber
+Makeup Artist (Beauty Industry)
+Esthetician
+Nail Technician
+Spa Therapist
+Personal Trainer
+Fitness Instructor
+Yoga Instructor
+Pilates Instructor
+Nutritionist / Dietitian
+Wellness Coach
+Tattoo/Piercing Artist
+Cosmetologist
+21. Sports & Athletics
+Professional Athlete
+Coach (any sport)
+Sports Referee / Umpire
+Sports Agent
+Sports Commentator
+Athletic Trainer
+Sports Psychologist
+Physical Education Instructor
+Fitness Center Manager
+Golf Instructor
+Swimming Instructor
+Personal Sports Coach
+Esports Player
+Esports Coach/Analyst
+Groundskeeper (Sports Fields)
+Sports Statistician / Analyst
+22. Real Estate & Property
+Real Estate Agent
+Real Estate Broker
+Property Manager
+Real Estate Appraiser
+Real Estate Developer
+Leasing Consultant
+Title Examiner
+Escrow Officer
+Building Superintendent
+Facilities Manager
+23. Retail & Customer Service
+Retail Store Manager
+Cashier
+Sales Clerk
+Visual Merchandiser
+Customer Service Representative
+Call Center Agent
+Personal Shopper
+Store Buyer
+Inventory Manager
+Loss Prevention Specialist
+24. Maritime & Aviation Specialties
+Marine Biologist (see Science)
+Ship Pilot / Harbor Pilot
+Deckhand
+Fisheries Observer
+Yacht Captain
+Scuba Diving Instructor
+Commercial Diver
+Aircraft Dispatcher
+Aviation Safety Inspector
+Airport Ground Crew
+Air Cargo Handler
+25. Writing, Publishing & Translation
+Author / Novelist
+Poet
+Ghostwriter
+Technical Writer
+Grant Writer
+Speechwriter
+Translator
+Interpreter
+Editor (Books/Magazines)
+Literary Critic
+Blogger
+Screenwriter (also under Media)
+26. Emerging & Interdisciplinary Fields
+Data Privacy Officer
+AI Ethics Specialist
+Prompt Engineer
+Genetic Engineer
+Bioinformatics Specialist
+Drone Pilot / UAV Operator
+Autonomous Vehicle Test Engineer
+Space Systems Engineer
+Astronaut
+Space Tourism Guide
+Cryptocurrency Analyst
+Virtual Reality Developer
+Augmented Reality Designer
+Digital Forensics Investigator
+E-sports Team Manager
+Smart City Planner
+Climate Resilience Officer
+Telemedicine Coordinator
+Biohacker / Synthetic Biologist
+Quantum Computing Researcher
+27. Skilled Craft & Artisan Work
+Blacksmith
+Leatherworker
+Weaver
+Basket Maker
+Shoemaker / Cobbler
+Watchmaker
+Luthier (Instrument Maker)
+Glass Artisan
+Woodcarver
+Upholsterer
+Bookbinder
+Sign Maker
+28. Security & Protective Services
+Private Security Guard
+Bodyguard / Executive Protection Agent
+Security Systems Technician
+Cybersecurity Consultant (see IT)
+Loss Prevention Officer
+Fire Marshal
+Lifeguard
+Private Investigator
+Bounty Hunter
+Locksmith (also Trades)
+29. Freelance, Gig & Independent Work
+Freelance Writer
+Freelance Designer
+Freelance Developer
+Virtual Assistant
+Consultant (General)
+Rideshare/Delivery Gig Worker
+Independent Contractor (Trades)
+Online Tutor
+Affiliate Marketer
+Dropshipping Store Owner
+Stock Photographer
+App Developer (Independent)
+30. Unique, Niche & Unconventional Careers
+Voice Coach
+Perfumer / Fragrance Chemist
+Sommelier (Wine Expert)
+Food Critic
+Toy Designer
+Theme Park Ride Designer
+Cruise Director
+Professional Gamer
+Auctioneer
+Genealogist
+Antique Appraiser
+Art Restorer
+Taxidermist
+Falconer
+Horse Trainer
+Animal Trainer (Film/Circus)
+Ethical Hacker (Security)
+UX Writer
+Color Consultant
+Feng Shui Consultant
+Personal Stylist
+Professional Organizer
+Mystery Shopper
+Crossword/Puzzle Creator
+Voice-over Artist
+Foreign Correspondent
+Weather Forecaster (TV)
+Cartographer / Mapmaker
+Ergonomics Consultant
+Sommelier for Tea/Coffee (Cupper)
