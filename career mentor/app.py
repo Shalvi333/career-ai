@@ -275,7 +275,9 @@ DIRECT_CAREER_KEYWORDS = {
     "scientist": ("Research Scientist (R&D)", "Biologist", "Chemist"), "biology": ("Biologist", "Microbiologist", "Geneticist"), "chemistry": ("Chemist", "Pharmacologist", "Forensic Scientist"),
     "physics": ("Physicist", "Astrophysicist", "Research Scientist (R&D)"), "space": ("Astronaut", "Space Systems Engineer", "Astrophysicist"), "astronomy": ("Astronomer", "Astrophysicist", "Space Systems Engineer"),
     "animals": ("Veterinarian", "Zoologist", "Wildlife Biologist"), "animal": ("Veterinarian", "Veterinary Technician", "Animal Trainer (Film/Circus)"), "wildlife": ("Wildlife Biologist", "Conservationist", "Park Ranger"),
-    "agriculture": ("Agronomist", "Agricultural Engineer", "Farm Manager"), "farming": ("Farmer (Crop)", "Agronomist", "Horticulturist"), "food": ("Food Scientist", "Chef", "Food Technologist"),
+    "plant": ("Botanist", "Horticulturist", "Plant Scientist"), "plants": ("Botanist", "Horticulturist", "Plant Scientist"), "plansts": ("Botanist", "Horticulturist", "Plant Scientist"),
+    "botany": ("Botanist", "Plant Scientist", "Conservationist"), "botanist": ("Botanist", "Plant Scientist", "Ecologist"), "gardening": ("Horticulturist", "Landscape Gardener", "Nursery Worker"), "garden": ("Horticulturist", "Landscape Gardener", "Landscape Architect"),
+    "horticulture": ("Horticulturist", "Landscape Gardener", "Agronomist"), "agriculture": ("Agronomist", "Agricultural Engineer", "Farm Manager"), "farming": ("Farmer (Crop)", "Agronomist", "Horticulturist"), "food": ("Food Scientist", "Chef", "Food Technologist"),
     "beauty": ("Makeup Artist (Beauty Industry)", "Cosmetologist", "Esthetician"), "makeup": ("Makeup Artist (Beauty Industry)", "Cosmetologist", "Beauty Content Creator"), "hair": ("Hairstylist / Hairdresser", "Barber", "Cosmetologist"),
     "fitness": ("Personal Trainer", "Fitness Instructor", "Sports Psychologist"), "yoga": ("Yoga Instructor", "Wellness Coach", "Fitness Instructor"),
     "defence": ("Army Officer", "Air Force Officer", "Military Engineer"), "defense": ("Army Officer", "Air Force Officer", "Military Engineer"), "police": ("Police Officer", "Detective", "Forensic Investigator"),
@@ -320,6 +322,11 @@ ROLE_SKILL_GUIDANCE = {
     "music": ("consistent instrument or vocal practice", "music theory", "recorded performances"),
     "nurse": ("biology and patient care", "communication", "clinical observation or volunteering"),
     "veterinarian": ("biology and animal care", "observation skills", "animal-welfare volunteering"),
+    "plant": ("plant biology and ecology", "gardening or nursery practice", "a small plant-growing or conservation project"),
+    "plants": ("plant biology and ecology", "gardening or nursery practice", "a small plant-growing or conservation project"),
+    "botany": ("plant biology and ecology", "field observation", "a small research or conservation project"),
+    "gardening": ("plant care and soil basics", "seasonal growing practice", "a small garden or nursery portfolio"),
+    "horticulture": ("plant science and soil management", "nursery or greenhouse practice", "garden-design documentation"),
 }
 
 CAREER_FIELD_SIGNALS = {
@@ -333,6 +340,7 @@ CAREER_FIELD_SIGNALS = {
     "social work": ("Social Services",), "politics": ("Government", "Public Policy"),
     "poetry": ("Writing", "Media"), "poet": ("Writing", "Media"), "journalism": ("Media", "Writing"), "translation": ("Education", "Writing"),
     "scientist": ("Science", "Research"), "biology": ("Science", "Research"), "chemistry": ("Science", "Research"), "physics": ("Science", "Research"), "space": ("Science", "Engineering"), "astronomy": ("Science", "Research"),
+    "plant": ("Agriculture", "Environment", "Science"), "plants": ("Agriculture", "Environment", "Science"), "plansts": ("Agriculture", "Environment", "Science"), "botany": ("Science", "Environment"), "botanist": ("Science", "Environment"), "gardening": ("Agriculture", "Environment"), "garden": ("Agriculture", "Environment"), "horticulture": ("Agriculture", "Environment"),
     "animals": ("Healthcare", "Environment"), "animal": ("Healthcare", "Environment"), "wildlife": ("Environment", "Science"), "agriculture": ("Agriculture", "Science"), "farming": ("Agriculture",), "food": ("Hospitality", "Science"),
     "beauty": ("Beauty", "Arts"), "makeup": ("Beauty", "Arts"), "hair": ("Beauty",), "fitness": ("Sports", "Healthcare"), "yoga": ("Sports", "Healthcare"),
     "defence": ("Government", "Engineering"), "defense": ("Government", "Engineering"), "police": ("Government", "Security"), "security": ("Security", "Technology"), "firefighter": ("Government", "Security"),
