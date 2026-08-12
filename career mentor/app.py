@@ -567,6 +567,33 @@ def local_demo_account(email: str, name: str = "") -> dict[str, str]:
     return saved if isinstance(saved, dict) else {}
 
 
+def built_in_mentor_reply(question: str) -> str:
+    """Give useful career guidance in the free public app without an LLM/API."""
+    text = question.lower()
+    careers = career_suggestions()[:3]
+    ranked = active_theme_ranking()
+    primary = ranked[0]
+    strengths = ", ".join(SKILLS_BY_THEME[primary][:3])
+    universities = university_recommendations()[:3]
+    scholarships = recommended_scholarships()[:3]
+
+    if any(word in text for word in ("scholarship", "financial aid", "funding", "fee", "afford")):
+        options = "; ".join(item["name"] for item in scholarships)
+        return f"For your current profile, start by checking: {options}. Also visit each university's official financial-aid page, note eligibility and deadlines, and prepare your marksheets, activity list, and income documents early."
+    if any(word in text for word in ("university", "universities", "college", "colleges", "campus", "admission", "apply")):
+        options = "; ".join(f"{item['name']} ({item['field']})" for item in universities)
+        return f"Based on your interests, good places to research first are: {options}. Compare the course curriculum, location, entry requirements, total cost, scholarships, and placement/internship opportunities before applying."
+    if any(word in text for word in ("skill", "skills", "learn", "learning", "certification", "certificate", "roadmap")):
+        return f"Your strongest direction currently is {RIASEC[primary][0]} work. Build these first: {strengths}. Choose one beginner course, make one small project, and add it to a portfolio or evidence folder. That is more valuable than collecting many certificates without practice."
+    if any(word in text for word in ("resume", "cv", "interview", "portfolio", "linkedin")):
+        return "Keep your resume to one clear page: education, relevant skills, projects/activities, achievements, and contact details. For interviews, prepare a 30-second introduction and two examples that show a skill, challenge, action, and result. Tailor both to the role you apply for."
+    if any(word in text for word in ("course", "degree", "subject", "subjects", "stream", "major", "study")):
+        return f"For your profile, explore courses connected to {', '.join(careers)}. Open each course syllabus and look for modules you genuinely enjoy. A good choice balances interest, your current strengths, entry requirements, and the kind of day-to-day work you want."
+    if any(word in text for word in ("career", "job", "profession", "work", "role", "future", "coding", "design", "acting", "doctor", "engineer", "business", "psychology", "writer", "artist")):
+        return f"Your current profile suggests these paths: {', '.join(careers)}. To choose between them, try one small real activity for each—such as a project, club, shadowing opportunity, short course, or conversation with someone in that field—and notice which work you keep wanting to return to."
+    return "I’m here for career and education guidance. Ask me about careers, courses, skills, universities, scholarships, resumes, interviews, or a learning roadmap, and I’ll help you plan the next step."
+
+
 def fetch_scores_and_insights(student_id: str) -> tuple[list[dict[str, object]], dict[str, object], str]:
     """Calls score_profile, then score_insights so the roadmap is saved."""
     score_response, error = post_json(score_api_url(), {"student_id": student_id}, "Career scoring")
@@ -1327,7 +1354,7 @@ def render_ai_mentor() -> None:
     st.markdown("<div class='top-title'>AI Mentor</div><div class='top-subtitle'>Career and education guidance only.</div><div class='ai-card'><h3>Ask a career-focused question</h3><p>I can help with careers, skills, courses, universities, scholarships, and internships. For unrelated topics, I’ll politely guide you back.</p></div>", unsafe_allow_html=True)
     student_id = active_student_id()
     if not student_id:
-        st.info("Finish the profile and RIASEC quiz to unlock saved chat history and fully personalized replies.")
+        st.info("Finish the profile and RIASEC quiz for more personalised suggestions.")
     messages: list[dict[str, object]] = []
     if student_id:
         messages, history_error = load_chat_history(student_id, chat_api_url())
@@ -1346,12 +1373,11 @@ def render_ai_mentor() -> None:
             with st.spinner("Career AI is thinking…"):
                 reply, error = send_chat_to_backend(student_id, question.strip())
         else:
-            reply, error = "", "Complete your profile to save AI Mentor conversations."
+            reply, error = built_in_mentor_reply(question.strip()), ""
         if error:
-            st.warning(error)
-            ranked = sorted(riasec_scores(), key=riasec_scores().get, reverse=True)
-            careers = career_suggestions()[:3]
-            reply = f"Your current profile points most toward {RIASEC[ranked[0]][0]} and {RIASEC[ranked[1]][0]} work. Explore {', '.join(careers)} and build {', '.join(SKILLS_BY_THEME[ranked[0]][:2])}."
+            # An online backend is optional. The public app remains helpful
+            # when it is unavailable by using its private, built-in mentor.
+            reply = built_in_mentor_reply(question.strip())
             st.session_state.mentor_history.append({"role": "student", "message": question.strip()})
             st.session_state.mentor_history.append({"role": "ai", "message": reply})
         else:
