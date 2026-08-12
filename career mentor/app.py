@@ -270,6 +270,25 @@ DIRECT_CAREER_KEYWORDS = {
     "chef": ("Chef", "Food Scientist", "Restaurant Manager"), "travel": ("Travel Consultant", "Hotel Manager", "Tourism Manager"),
     "pilot": ("Pilot", "Aerospace Engineer", "Air Traffic Controller"),
     "social work": ("Social Worker", "Community Manager", "Nonprofit Director"), "politics": ("Policy Analyst", "Diplomat", "Public Relations Specialist"),
+    "poetry": ("Poet", "Author / Novelist", "Editor (Books/Magazines)"), "poet": ("Poet", "Author / Novelist", "Literary Critic"),
+    "journalism": ("Journalist", "Photojournalist", "Science Journalist"), "journalist": ("Journalist", "Photojournalist", "Science Journalist"), "translation": ("Translator", "Interpreter", "Language Teacher"),
+    "scientist": ("Research Scientist (R&D)", "Biologist", "Chemist"), "biology": ("Biologist", "Microbiologist", "Geneticist"), "chemistry": ("Chemist", "Pharmacologist", "Forensic Scientist"),
+    "physics": ("Physicist", "Astrophysicist", "Research Scientist (R&D)"), "space": ("Astronaut", "Space Systems Engineer", "Astrophysicist"), "astronomy": ("Astronomer", "Astrophysicist", "Space Systems Engineer"),
+    "animals": ("Veterinarian", "Zoologist", "Wildlife Biologist"), "animal": ("Veterinarian", "Veterinary Technician", "Animal Trainer (Film/Circus)"), "wildlife": ("Wildlife Biologist", "Conservationist", "Park Ranger"),
+    "agriculture": ("Agronomist", "Agricultural Engineer", "Farm Manager"), "farming": ("Farmer (Crop)", "Agronomist", "Horticulturist"), "food": ("Food Scientist", "Chef", "Food Technologist"),
+    "beauty": ("Makeup Artist (Beauty Industry)", "Cosmetologist", "Esthetician"), "makeup": ("Makeup Artist (Beauty Industry)", "Cosmetologist", "Beauty Content Creator"), "hair": ("Hairstylist / Hairdresser", "Barber", "Cosmetologist"),
+    "fitness": ("Personal Trainer", "Fitness Instructor", "Sports Psychologist"), "yoga": ("Yoga Instructor", "Wellness Coach", "Fitness Instructor"),
+    "defence": ("Army Officer", "Air Force Officer", "Military Engineer"), "defense": ("Army Officer", "Air Force Officer", "Military Engineer"), "police": ("Police Officer", "Detective", "Forensic Investigator"),
+    "security": ("Cybersecurity Analyst", "Private Security Guard", "Security Systems Technician"), "firefighter": ("Firefighter", "Emergency Management Director", "Fire Marshal"),
+    "real estate": ("Real Estate Agent", "Property Manager", "Real Estate Developer"), "retail": ("Retail Store Manager", "Visual Merchandiser", "Store Buyer"),
+    "marine": ("Marine Biologist", "Marine Engineer", "Ship Captain"), "aviation": ("Commercial Airline Pilot", "Air Traffic Controller", "Aircraft Maintenance Engineer"),
+    "car": ("Automotive Engineer", "Auto Mechanic", "Automotive Designer"), "mechanic": ("Mechanical Engineer", "Auto Mechanic", "Aircraft Mechanic"),
+    "electrician": ("Electrician", "Electrical Engineer", "Electrical Lineman"), "construction": ("Civil Engineer", "Construction Site Supervisor", "Architect"),
+    "climate": ("Climate Change Analyst", "Environmental Scientist", "Sustainability Manager"), "sustainability": ("Sustainability Manager", "Environmental Consultant", "Renewable Energy Engineer"),
+    "photographer": ("Photographer", "Photojournalist", "Stock Photographer"), "video": ("Video Editor", "Film Maker", "Content Creator"), "content creator": ("Content Strategist", "Content Creator", "Social Media Manager"),
+    "voice": ("Voice Coach", "Radio Host", "Voice Actor"), "gaming": ("Game Developer", "Game Designer", "Esports Player"), "esports": ("Esports Player", "Esports Coach/Analyst", "E-sports Team Manager"),
+    "history": ("Historian", "Archaeologist", "Museum Curator"), "archaeology": ("Archaeologist", "Museum Curator", "Anthropologist"),
+    "religion": ("Religious Minister / Clergy", "Community Organizer", "Counselor (Mental Health)"), "counselling": ("Counsellor", "Psychologist", "Career Counselor"),
 }
 
 CAREER_FIELD_SIGNALS = {
@@ -281,6 +300,16 @@ CAREER_FIELD_SIGNALS = {
     "engineering": ("Engineering", "Technology"), "architecture": ("Engineering", "Arts"), "environment": ("Environment", "Science"), "science": ("Science", "Research"),
     "sports": ("Sports", "Healthcare"), "cricket": ("Sports",), "chef": ("Hospitality",), "travel": ("Hospitality", "Tourism"), "pilot": ("Transportation", "Engineering"),
     "social work": ("Social Services",), "politics": ("Government", "Public Policy"),
+    "poetry": ("Writing", "Media"), "poet": ("Writing", "Media"), "journalism": ("Media", "Writing"), "translation": ("Education", "Writing"),
+    "scientist": ("Science", "Research"), "biology": ("Science", "Research"), "chemistry": ("Science", "Research"), "physics": ("Science", "Research"), "space": ("Science", "Engineering"), "astronomy": ("Science", "Research"),
+    "animals": ("Healthcare", "Environment"), "animal": ("Healthcare", "Environment"), "wildlife": ("Environment", "Science"), "agriculture": ("Agriculture", "Science"), "farming": ("Agriculture",), "food": ("Hospitality", "Science"),
+    "beauty": ("Beauty", "Arts"), "makeup": ("Beauty", "Arts"), "hair": ("Beauty",), "fitness": ("Sports", "Healthcare"), "yoga": ("Sports", "Healthcare"),
+    "defence": ("Government", "Engineering"), "defense": ("Government", "Engineering"), "police": ("Government", "Security"), "security": ("Security", "Technology"), "firefighter": ("Government", "Security"),
+    "real estate": ("Real Estate", "Business"), "retail": ("Retail", "Business"), "marine": ("Science", "Transportation"), "aviation": ("Transportation", "Engineering"),
+    "car": ("Engineering", "Transportation"), "mechanic": ("Engineering", "Skilled Trades"), "electrician": ("Engineering", "Skilled Trades"), "construction": ("Engineering", "Skilled Trades"),
+    "climate": ("Environment", "Science"), "sustainability": ("Environment", "Science"), "photographer": ("Media", "Arts"), "video": ("Media", "Arts"), "content creator": ("Media", "Marketing"),
+    "voice": ("Media", "Arts"), "gaming": ("Technology", "Media"), "esports": ("Sports", "Technology"), "history": ("Education", "Research"), "archaeology": ("Science", "Research"),
+    "religion": ("Social Services", "Education"), "counselling": ("Healthcare", "Social Services"),
 }
 
 
