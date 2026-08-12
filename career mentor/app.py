@@ -645,10 +645,36 @@ def direct_careers_from_text(text: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(found))
 
 
+def job_titles_from_text(text: str) -> tuple[str, ...]:
+    """Recognise any of the full local job catalogue in a mentor question."""
+    lowered = text.lower()
+    matches = [
+        title for title in ALL_JOBS
+        if len(title) >= 4 and re.search(rf"(?<!\w){re.escape(title.lower())}(?!\w)", lowered)
+    ]
+    return tuple(matches[:3])
+
+
+def is_career_mentor_question(question: str) -> bool:
+    """Keep the mentor career-focused while allowing natural student wording."""
+    text = question.lower()
+    guidance_words = (
+        "career", "job", "course", "college", "university", "skill", "scholarship",
+        "internship", "study", "degree", "subject", "resume", "interview", "education",
+        "profession", "future", "stream", "admission", "salary", "salary", "placement",
+        "roadmap", "qualification", "exam", "portfolio", "cv", "application",
+    )
+    return bool(
+        any(word in text for word in guidance_words)
+        or direct_careers_from_text(text)
+        or job_titles_from_text(text)
+    )
+
+
 def built_in_mentor_reply(question: str) -> str:
     """Give question-aware career guidance in the free public app without an LLM/API."""
     text = question.lower()
-    question_careers = direct_careers_from_text(text)
+    question_careers = direct_careers_from_text(text) or job_titles_from_text(text)
     careers = question_careers[:3] or career_suggestions()[:3]
     ranked = active_theme_ranking()
     primary = ranked[0]
@@ -1443,41 +1469,19 @@ def render_dashboard() -> None:
 
 def render_ai_mentor() -> None:
     st.markdown("<div class='top-title'>AI Mentor</div><div class='top-subtitle'>Career and education guidance only.</div><div class='ai-card'><h3>Ask a career-focused question</h3><p>I can help with careers, skills, courses, universities, scholarships, and internships. For unrelated topics, I’ll politely guide you back.</p></div>", unsafe_allow_html=True)
-    student_id = active_student_id()
-    if not student_id:
-        st.info("Finish the profile and RIASEC quiz for more personalised suggestions.")
-    messages: list[dict[str, object]] = []
-    if student_id:
-        messages, history_error = load_chat_history(student_id, chat_api_url())
-        if history_error:
-            st.warning(history_error)
+    st.caption("Your question and your quiz answers are used to provide the guidance below. This free version keeps this conversation in your current browser session.")
     with st.form("mentor_form", clear_on_submit=True):
         question = st.text_input("Ask your question", placeholder="Which skills should I build for UX design?")
         asked = st.form_submit_button("Ask AI Mentor  →", use_container_width=True)
     if asked and question.strip():
-        career_words = ("career", "job", "course", "college", "university", "skill", "scholarship", "internship", "study", "degree", "subject", "resume", "interview", "education", "profession", *DIRECT_CAREER_KEYWORDS.keys())
-        is_career_question = any(word in question.lower() for word in career_words)
-        if not is_career_question:
+        if not is_career_mentor_question(question):
             reply = "I’m here to help with career and education guidance. Please ask me about careers, courses, skills, universities, scholarships, internships, or study plans."
-            error = ""
-        elif student_id:
-            with st.spinner("Career AI is thinking…"):
-                reply, error = send_chat_to_backend(student_id, question.strip())
         else:
-            reply, error = built_in_mentor_reply(question.strip()), ""
-        if error:
-            # An online backend is optional. The public app remains helpful
-            # when it is unavailable by using its private, built-in mentor.
             reply = built_in_mentor_reply(question.strip())
-            st.session_state.mentor_history.append({"role": "student", "message": question.strip()})
-            st.session_state.mentor_history.append({"role": "ai", "message": reply})
-        else:
-            if student_id:
-                load_chat_history.clear()
-            st.session_state.mentor_history.append({"role": "student", "message": question.strip()})
-            st.session_state.mentor_history.append({"role": "ai", "message": reply})
+        st.session_state.mentor_history.append({"role": "student", "message": question.strip()})
+        st.session_state.mentor_history.append({"role": "ai", "message": reply})
         st.rerun()
-    for message in messages or st.session_state.mentor_history:
+    for message in st.session_state.mentor_history:
         role = "You" if chat_message_role(message) == "student" else "Career AI"
         st.markdown(f"<div class='panel'><b>{role}:</b> {escape(chat_message_text(message))}</div>", unsafe_allow_html=True)
 
