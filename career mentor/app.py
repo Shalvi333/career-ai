@@ -1229,7 +1229,7 @@ def is_meaningful_answer(answer: str) -> bool:
     return True
 
 
-def intake_answer_error(index: int, answer: str) -> str:
+def intake_answer_error(index: int, answer: str, prompt: str = "") -> str:
     """Return a student-friendly validation message, or an empty string."""
     if not is_meaningful_answer(answer):
         return "Please replace the random text with a meaningful answer. Examples accepted: yes/no, US or UK, 85, crochet, or a full sentence."
@@ -1239,6 +1239,10 @@ def intake_answer_error(index: int, answer: str) -> str:
         words = re.findall(r"[A-Za-z]{2,}", answer)
         if not re.search(r"\d{1,2}", answer) or len(words) < 2:
             return "Please include your age and grade/year in the answer, for example: “Aanya, 16, Grade 11”."
+    # For rating questions, a real score is needed before a recommendation can
+    # use the answer. The student may add an explanation after the number.
+    if ("scale of 1–5" in prompt.lower() or "rate your confidence (1–5)" in prompt.lower()) and not re.search(r"(?<!\d)[1-5](?!\d)", answer):
+        return "Please include a rating from 1 to 5, then add a short explanation if you wish."
     return ""
 
 
@@ -1353,56 +1357,49 @@ def render_intake() -> None:
     section, prompt = questions[index]
     percent = round((index + 1) * 100 / len(questions))
     st.markdown(f"<div class='top-title'>Career Discovery Quiz</div><div class='top-subtitle'>{'Quick' if st.session_state.intake_mode == 'short' else 'Complete'} version · Answer honestly — there are no right answers.</div><div class='quiz-step'>{section}</div><div class='progress-shell'><div class='progress-fill' style='width:{percent}%'></div></div>", unsafe_allow_html=True)
-    st.markdown(f"<div class='question-card'><div class='question-number'>QUESTION {index + 1} OF {len(questions)}</div><div class='question-text'>{escape(prompt)}</div>", unsafe_allow_html=True)
-    quiz_name = st.session_state.student_name
-    quiz_email = st.session_state.student_email
-    if index == 0:
-        quiz_name = st.text_input(
-            "What should we call you?",
-            value=st.session_state.student_name,
-            placeholder="Enter your name",
-            key="quiz_display_name",
-        )
-        quiz_email = st.text_input(
-            "Email address",
-            value=st.session_state.student_email,
-            placeholder="you@example.com",
-            key="quiz_email",
-        )
     key = f"intake_{index}"
-    answer = st.text_area("Your answer", value=st.session_state.intake_answers.get(key, ""), placeholder="Write your answer here…", height=175, key=f"widget_{key}")
+    st.markdown(f"<div class='question-card'><div class='question-number'>QUESTION {index + 1} OF {len(questions)}</div><div class='question-text'>{escape(prompt)}</div>", unsafe_allow_html=True)
+    # A form batches typing and clicking into one submission. This removes the
+    # old "Press ⌘+Enter to apply" delay before the Next button responds.
+    with st.form(f"intake_form_{index}", clear_on_submit=False):
+        quiz_name = st.session_state.student_name
+        quiz_email = st.session_state.student_email
+        if index == 0:
+            quiz_name = st.text_input("What should we call you?", value=st.session_state.student_name, placeholder="Enter your name", key="quiz_display_name")
+            quiz_email = st.text_input("Email address", value=st.session_state.student_email, placeholder="you@example.com", key="quiz_email")
+        answer = st.text_area("Your answer", value=st.session_state.intake_answers.get(key, ""), placeholder="Write your answer here…", height=175, key=f"widget_{key}")
+        previous, _, next_col = st.columns([1, 2, 1])
+        with previous:
+            go_previous = index > 0 and st.form_submit_button("← Previous", use_container_width=True)
+        with next_col:
+            next_label = "Finish quiz  →" if index == len(questions) - 1 else "Next question  →"
+            go_next = st.form_submit_button(next_label, use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
-    previous, spacer, next_col = st.columns([1, 2, 1])
-    with previous:
-        if index and st.button("← Previous", use_container_width=True):
-            st.session_state.intake_answers[key] = answer
-            st.session_state.intake_index -= 1
-            st.rerun()
-    with next_col:
-        next_label = "Finish quiz  →" if index == len(questions) - 1 else "Next question  →"
-        validation_error = intake_answer_error(index, answer)
-        answer_is_valid = not validation_error
-        if answer.strip() and validation_error:
+
+    if go_previous:
+        st.session_state.intake_answers[key] = answer.strip()
+        st.session_state.intake_index -= 1
+        st.rerun()
+    if go_next:
+        validation_error = intake_answer_error(index, answer, prompt)
+        if validation_error:
             st.error(f"Invalid answer — {validation_error}")
-        if st.button(next_label, use_container_width=True, disabled=not answer_is_valid):
-            if validation_error:
-                st.error(f"Invalid answer — {validation_error}")
+            return
+        if index == 0:
+            if not quiz_name.strip():
+                st.error("Please enter the name you would like us to use.")
                 return
-            if index == 0:
-                if not quiz_name.strip():
-                    st.error("Please enter the name you would like us to use.")
-                    return
-                if not is_valid_email(quiz_email):
-                    st.error("Please enter a valid email address, for example you@example.com.")
-                    return
-                st.session_state.student_name = quiz_name.strip().title()
-                st.session_state.student_email = quiz_email.strip()
-            st.session_state.intake_answers[key] = answer.strip()
-            if index == len(questions) - 1:
-                st.session_state.app_stage = "intake_results"
-            else:
-                st.session_state.intake_index += 1
-            st.rerun()
+            if not is_valid_email(quiz_email):
+                st.error("Please enter a valid email address, for example you@example.com.")
+                return
+            st.session_state.student_name = quiz_name.strip().title()
+            st.session_state.student_email = quiz_email.strip()
+        st.session_state.intake_answers[key] = answer.strip()
+        if index == len(questions) - 1:
+            st.session_state.app_stage = "intake_results"
+        else:
+            st.session_state.intake_index += 1
+        st.rerun()
 
 
 def render_intake_results() -> None:
