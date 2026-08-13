@@ -1366,7 +1366,10 @@ def render_intake() -> None:
             st.rerun()
     with next_col:
         next_label = "Finish quiz  →" if index == len(questions) - 1 else "Next question  →"
-        if st.button(next_label, use_container_width=True):
+        answer_is_valid = is_meaningful_answer(answer)
+        if answer.strip() and not answer_is_valid:
+            st.error("Please replace the random text with a meaningful answer. Examples accepted: yes/no, US or UK, 85, crochet, or a full sentence.")
+        if st.button(next_label, use_container_width=True, disabled=not answer_is_valid):
             if not is_meaningful_answer(answer):
                 st.error("Please write a meaningful answer. Yes/no, countries such as US or UK, and marks such as 85 or 92% are accepted. Random keyboard text such as “asdf” or “iuhdjcknn” is not.")
                 return
