@@ -62,6 +62,48 @@ QUOTES = (
     "Your interests are clues, not limits.",
 )
 
+# Direct websites for frequently recommended institutions. Every other entry
+# still receives a safe, targeted official-site search link via the helper
+# below, so students can open a source for any university in the catalogue.
+OFFICIAL_UNIVERSITY_URLS = {
+    "indian institute of science (iisc), bengaluru": "https://iisc.ac.in/",
+    "national institute of technology karnataka (nitk), surathkal": "https://www.nitk.ac.in/",
+    "international institute of information technology bangalore (iiit-b)": "https://www.iiitb.ac.in/",
+    "rv college of engineering, bengaluru": "https://rvce.edu.in/",
+    "bms college of engineering, bengaluru": "https://bmsce.ac.in/",
+    "ramaiah institute of technology, bengaluru": "https://msrit.edu/",
+    "pes university, bengaluru": "https://pes.edu/",
+    "kle technological university, hubballi": "https://kletech.ac.in/",
+    "national law school of india university (nlsiu), bengaluru": "https://www.nls.ac.in/",
+    "national institute of mental health and neuro sciences (nimhans), bengaluru": "https://nimhans.ac.in/",
+    "st. john's medical college, bengaluru": "https://stjohns.in/",
+    "manipal academy of higher education, manipal": "https://www.manipal.edu/",
+    "university of mysore, mysuru": "https://uni-mysore.ac.in/",
+    "bangalore university, bengaluru": "https://bangaloreuniversity.karnataka.gov.in/",
+    "christ university, bengaluru": "https://christuniversity.in/",
+    "st. joseph's university, bengaluru": "https://www.sju.edu.in/",
+    "azim premji university, bengaluru": "https://azimpremjiuniversity.edu.in/",
+    "srishti manipal institute of art, design and technology, bengaluru": "https://srishtimanipalinstitute.in/",
+    "university of agricultural sciences, bengaluru": "https://uasbangalore.edu.in/",
+    "karnataka veterinary, animal and fisheries sciences university, bidar": "https://kvafsu.edu.in/",
+    "iisc bangalore": "https://iisc.ac.in/",
+    "nlsiu bangalore": "https://www.nls.ac.in/",
+    "mit": "https://www.mit.edu/",
+    "stanford university": "https://www.stanford.edu/",
+    "harvard university": "https://www.harvard.edu/",
+    "university of oxford": "https://www.ox.ac.uk/",
+    "university of cambridge": "https://www.cam.ac.uk/",
+    "national university of singapore": "https://nus.edu.sg/",
+    "eth zurich": "https://ethz.ch/",
+    "iit madras": "https://www.iitm.ac.in/",
+    "iit bombay": "https://www.iitb.ac.in/",
+    "iit delhi": "https://home.iitd.ac.in/",
+    "iim bangalore": "https://www.iimb.ac.in/",
+    "iim ahmedabad": "https://www.iima.ac.in/",
+    "aiims new delhi": "https://www.aiims.edu/",
+    "iisc bangalore": "https://iisc.ac.in/",
+}
+
 # The full intake bank, grouped as in the supplied document. All prompts are
 # intentionally open text so students can answer in their own words.
 INTAKE_SECTIONS = (
@@ -425,6 +467,14 @@ def load_university_data() -> tuple[tuple[dict[str, str], ...], tuple[dict[str, 
 
 
 UNIVERSITY_CATALOG, SCHOLARSHIP_CATALOG = load_university_data()
+
+
+def university_website(name: str) -> str:
+    """Return an official website when known, otherwise an official-site search."""
+    direct_url = OFFICIAL_UNIVERSITY_URLS.get(name.strip().lower())
+    if direct_url:
+        return direct_url
+    return "https://www.google.com/search?" + urlencode({"q": f"{name} official website"})
 
 
 @st.cache_data(ttl=60 * 60 * 24, show_spinner=False)
@@ -1730,27 +1780,32 @@ def render_universities() -> None:
             st.warning("No directory results were returned. Check your internet connection or try a broader search.")
             return
         st.caption(f"{len(global_results)} institutions found. Use each university’s official website to verify courses, fees, accreditation, admissions, and scholarships.")
-        cards = "".join(
-            f"<div class='match-card'><span class='match-pill'>{escape(item['country'])}</span><div class='icon-bubble'>🎓</div>"
-            f"<h3>{escape(item['name'])}</h3><p class='muted'>{escape(item['city']) or 'Location not listed'}"
-            + (f"<br><span class='mint'>{escape(item['website'])}</span>" if item['website'] else "")
-            + "</p></div>"
-            for item in global_results
-        )
-        st.markdown("<div class='match-grid'>" + cards + "</div>", unsafe_allow_html=True)
+        for row_start in range(0, len(global_results), 3):
+            row = global_results[row_start:row_start + 3]
+            columns = st.columns(3)
+            for column, item in zip(columns, row):
+                with column:
+                    st.markdown(
+                        f"<div class='match-card'><span class='match-pill'>{escape(item['country'])}</span><div class='icon-bubble'>🎓</div>"
+                        f"<h3>{escape(item['name'])}</h3><p class='muted'>{escape(item['city']) or 'Location not listed'}</p></div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.link_button(
+                        "Open university website ↗",
+                        item["website"] or university_website(item["name"]),
+                        use_container_width=True,
+                        key=f"world_university_link_{row_start}_{item['name']}",
+                    )
         return
     recommended = university_recommendations()
-    recommended_cards = "".join(
-        f"<div class='match-card'><span class='match-pill'>For you</span><div class='icon-bubble'>🎓</div>"
-        f"<h3>{escape(university['name'])}</h3><p class='muted'><b>{escape(university['field'])}</b><br>{escape(university['country'])}<br><span class='mint'>{escape(university['scholarships'])}</span></p></div>"
-        for university in recommended
-    )
-    st.markdown(
-        "<div class='panel'><h3>🦋 Recommended for you</h3><p class='muted'>"
-        + escape(university_recommendation_reason())
-        + "</p><div class='match-grid'>" + recommended_cards + "</div></div>",
-        unsafe_allow_html=True,
-    )
+    with st.container(border=True):
+        st.markdown("### 🦋 Recommended for you")
+        st.caption(university_recommendation_reason())
+        recommendation_columns = st.columns(3)
+        for column, university in zip(recommendation_columns, recommended):
+            with column:
+                st.markdown(f"<div class='match-card'><span class='match-pill'>For you</span><div class='icon-bubble'>🎓</div><h3>{escape(university['name'])}</h3><p class='muted'><b>{escape(university['field'])}</b><br>{escape(university['country'])}<br><span class='mint'>{escape(university['scholarships'])}</span></p></div>", unsafe_allow_html=True)
+                st.link_button("Open university website ↗", university_website(university["name"]), use_container_width=True)
     st.markdown("<h2 style='margin-top:28px'>Browse all curated universities</h2>", unsafe_allow_html=True)
     fields = tuple(sorted({university["field"] for university in UNIVERSITY_CATALOG}))
     search_col, field_col = st.columns([2, 1])
@@ -1767,12 +1822,13 @@ def render_universities() -> None:
     if not filtered:
         st.info("No universities match that search.")
         return
-    cards = "".join(
-        f"<div class='match-card'><span class='match-pill'>{escape(university['country'])}</span><div class='icon-bubble'>🎓</div>"
-        f"<h3>{escape(university['name'])}</h3><p class='muted'><b>{escape(university['field'])}</b><br>{escape(university['reputation'])}<br><span class='mint'>{escape(university['scholarships'])}</span></p></div>"
-        for university in filtered
-    )
-    st.markdown("<div class='match-grid'>" + cards + "</div>", unsafe_allow_html=True)
+    for row_start in range(0, len(filtered), 3):
+        row = filtered[row_start:row_start + 3]
+        columns = st.columns(3)
+        for column, university in zip(columns, row):
+            with column:
+                st.markdown(f"<div class='match-card'><span class='match-pill'>{escape(university['country'])}</span><div class='icon-bubble'>🎓</div><h3>{escape(university['name'])}</h3><p class='muted'><b>{escape(university['field'])}</b><br>{escape(university['reputation'])}<br><span class='mint'>{escape(university['scholarships'])}</span></p></div>", unsafe_allow_html=True)
+                st.link_button("Open university website ↗", university_website(university["name"]), use_container_width=True, key=f"university_link_{row_start}_{university['name']}")
 
 
 def render_scholarships() -> None:
