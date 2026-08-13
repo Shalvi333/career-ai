@@ -1217,6 +1217,10 @@ def is_meaningful_answer(answer: str) -> bool:
     # Reject common keyboard runs and obvious nonsense such as "iuhdjcknn".
     if any(fragment in compact for fragment in keyboard_mash_fragments):
         return False
+    # A run such as "isjjjd" or "helloooo" is almost always placeholder
+    # text in this questionnaire, not an answer a recommendation can use.
+    if re.search(r"([a-z])\1{2,}", letters):
+        return False
     if len(cleaned) < 3 or (letters and len(set(letters)) == 1):
         return False
     if len(letters) < 2:
