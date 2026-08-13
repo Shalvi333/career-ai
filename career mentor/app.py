@@ -18,6 +18,11 @@ from urllib.request import Request, urlopen
 
 import streamlit as st
 
+try:
+    from openai import OpenAI
+except ImportError:  # Lets the rest of the student project run until deploy installs the SDK.
+    OpenAI = None
+
 
 # Transparent butterfly logo: it blends into the page instead of appearing
 # as a screenshot with a dark square behind it.
@@ -32,6 +37,7 @@ DEFAULT_CHAT_API_URL = "http://127.0.0.1:8000/mentor/chat"
 DEFAULT_ROADMAP_API_URL = "http://127.0.0.1:8000/roadmap"
 DEFAULT_SCORE_API_URL = "http://127.0.0.1:8000/score"
 DEFAULT_AUTH_API_URL = "http://127.0.0.1:8000/auth"
+DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 st.set_page_config(page_title="Career AI", page_icon=LOGO_PATH, layout="wide", initial_sidebar_state="expanded")
 
 PAGES = ("Dashboard", "Explore Careers", "Skill Roadmap", "Scholarships", "Universities", "AI Mentor")
@@ -828,6 +834,74 @@ def built_in_mentor_reply(question: str) -> str:
     if any(word in text for word in ("career", "job", "profession", "work", "role", "future", "coding", "design", "acting", "doctor", "engineer", "business", "psychology", "writer", "artist")):
         return f"Relevant paths for your question are: {focus}. To choose between them, try one small real activity for each—such as a project, club, shadowing opportunity, short course, or conversation with someone in that field—and notice which work you keep wanting to return to."
     return "I’m here for career and education guidance. Ask me about careers, courses, skills, universities, scholarships, resumes, interviews, or a learning roadmap, and I’ll help you plan the next step."
+
+
+def openai_api_key() -> str:
+    """Read the private key from Streamlit Secrets, never from source code."""
+    try:
+        return str(st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", ""))).strip()
+    except FileNotFoundError:
+        return os.getenv("OPENAI_API_KEY", "").strip()
+
+
+def openai_model() -> str:
+    try:
+        return str(st.secrets.get("OPENAI_MODEL", os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL))).strip()
+    except FileNotFoundError:
+        return os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL).strip()
+
+
+def gpt_mentor_reply(question: str) -> tuple[str, str]:
+    """Generate a safe, profile-aware response using GPT when Secrets are set."""
+    api_key = openai_api_key()
+    if not api_key:
+        return "", "No OpenAI key is configured."
+    if OpenAI is None:
+        return "", "The OpenAI package is not installed yet."
+
+    career_matches = ", ".join(career_suggestions()[:5]) or "Not available yet"
+    profile_summary = {
+        "student_name": profile_name(),
+        "quiz_answers": list(st.session_state.intake_answers.values())[:25],
+        "riasec_completed": bool(st.session_state.personality_complete),
+        "riasec_themes": [RIASEC[code][0] for code in active_theme_ranking()[:3]],
+        "suggested_careers": career_matches,
+    }
+    history = st.session_state.mentor_history[-6:]
+    history_text = "\n".join(
+        f"{'Student' if chat_message_role(item) == 'student' else 'Mentor'}: {chat_message_text(item)}"
+        for item in history
+    )
+    instructions = (
+        "You are Career AI, a warm, accurate career mentor for students. "
+        "Only answer questions about careers, education, skills, courses, colleges/universities, "
+        "scholarships, internships, portfolios, resumes, interviews, and study plans. "
+        "For unrelated topics, politely say you can only help with career and education guidance. "
+        "Use the supplied student profile where useful, but do not invent marks, rankings, scholarship deadlines, "
+        "admissions requirements, or facts. Do not guarantee outcomes. Give practical, concise next steps. "
+        "For scholarships and university applications, remind the student to verify current eligibility, fees, deadlines, "
+        "and official information."
+    )
+    prompt = (
+        f"Student profile:\n{json.dumps(profile_summary, ensure_ascii=False)}\n\n"
+        f"Recent conversation:\n{history_text or 'No previous messages.'}\n\n"
+        f"Student question: {question}"
+    )
+    try:
+        client = OpenAI(api_key=api_key)
+        response = client.responses.create(
+            model=openai_model(),
+            instructions=instructions,
+            input=prompt,
+            max_output_tokens=500,
+        )
+        reply = (response.output_text or "").strip()
+        if not reply:
+            return "", "GPT did not return a reply."
+        return reply, ""
+    except Exception as error:
+        # The student sees a friendly fallback, not secret/configuration details.
+        return "", f"GPT is temporarily unavailable ({type(error).__name__})."
 
 
 def fetch_scores_and_insights(student_id: str) -> tuple[list[dict[str, object]], dict[str, object], str]:
@@ -1657,7 +1731,8 @@ def render_dashboard() -> None:
 
 def render_ai_mentor() -> None:
     st.markdown("<div class='top-title'>AI Mentor</div><div class='top-subtitle'>Career and education guidance only.</div><div class='ai-card'><h3>Ask a career-focused question</h3><p>I can help with careers, skills, courses, universities, scholarships, and internships. For unrelated topics, I’ll politely guide you back.</p></div>", unsafe_allow_html=True)
-    st.caption("Your question and your quiz answers are used to provide the guidance below. This free version keeps this conversation in your current browser session.")
+    using_gpt = bool(openai_api_key() and OpenAI is not None)
+    st.caption("GPT is using your quiz profile to personalise career guidance." if using_gpt else "Your question and your quiz answers are used to provide the guidance below. This conversation stays in your current browser session.")
     with st.form("mentor_form", clear_on_submit=True):
         question = st.text_input("Ask your question", placeholder="Which skills should I build for UX design?")
         asked = st.form_submit_button("Ask AI Mentor  →", use_container_width=True)
@@ -1665,7 +1740,11 @@ def render_ai_mentor() -> None:
         if not is_career_mentor_question(question):
             reply = "I’m here to help with career and education guidance. Please ask me about careers, courses, skills, universities, scholarships, internships, or study plans."
         else:
-            reply = built_in_mentor_reply(question.strip())
+            reply, gpt_error = gpt_mentor_reply(question.strip())
+            if not reply:
+                reply = built_in_mentor_reply(question.strip())
+                if using_gpt:
+                    st.info("GPT could not be reached for this message, so Career AI used its built-in career guidance.")
         st.session_state.mentor_history.append({"role": "student", "message": question.strip()})
         st.session_state.mentor_history.append({"role": "ai", "message": reply})
         st.rerun()
