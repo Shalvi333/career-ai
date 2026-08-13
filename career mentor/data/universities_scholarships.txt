@@ -21,6 +21,10 @@ INSPIRE Scholarship	Govt of India (DST)	₹80,000/year	Science students studying
 JN Tata Endowment / Sir Ratan Tata Trust	Tata Trusts	Partial loan-scholarships	Indian students going abroad, any field
 KC Mahindra / Inlaks Shivdasani Foundation	Private Indian foundations	Partial to substantial funding	Indian students, merit-based, abroad study
 Need-blind/full-need US policy	Harvard, MIT, Princeton, Yale, and a few others	Meets 100% of demonstrated financial need	Undergrad admits, including many international students
+Karnataka State Scholarship Portal (SSP)	Government of Karnataka	State scholarship application portal; support and eligibility vary by department and course	Eligible Karnataka students; verify the current scheme and deadline on the official portal
+Vidyasiri Scholarship	Karnataka Backward Classes Welfare Department	Financial support subject to the current year's eligibility rules	Eligible Karnataka students in post-matric studies; category, income and course rules apply
+Karnataka ePASS Post-Matric Scholarship	Government of Karnataka	Post-matric fee and maintenance support subject to the notified scheme	Eligible SC/ST and other notified-category Karnataka students; verify current criteria
+Sitaram Jindal Foundation Scholarship	Sitaram Jindal Foundation	Need-based education support; amount and eligibility vary	Indian students meeting current academic and income criteria
 1. Business, Management & Finance
 University	Country	Ranking/Reputation	Scholarships
 Harvard Business School	USA	#1 QS Business & Management 2026	Need-based aid covering full need; no loans required
@@ -291,3 +295,27 @@ Gemological Institute of America (GIA)	USA (global campuses)	World's top gemolog
 National Centre for Circus Arts	UK	Leading circus arts training institute	Access bursaries
 Gemological Institute India (GII), Mumbai	India	India's leading gemology training institute	Institute scholarships
 National Institute of Fashion Technology (NIFT), Delhi	India	India's premier fashion/design institute (niche specializations available)	NIFT merit-cum-means scholarships
+31. Karnataka Universities & Colleges — Technology, Engineering and Science
+University	Country	Ranking/Reputation	Scholarships
+Indian Institute of Science (IISc), Bengaluru	India	Leading Indian research university for science, engineering and interdisciplinary research	INSPIRE, DBT, CSIR/UGC fellowships and institute support; eligibility varies
+National Institute of Technology Karnataka (NITK), Surathkal	India	National Institute of Technology with engineering, science and management programmes	Central and institute merit-cum-means support; category-based schemes may apply
+International Institute of Information Technology Bangalore (IIIT-B)	India	Specialist technology institute in Bengaluru	Institute scholarships and external merit/need funding; verify current calls
+RV College of Engineering, Bengaluru	India	Established engineering college with broad technical programmes	Merit, need and government scholarship options; verify with the college
+BMS College of Engineering, Bengaluru	India	Established Bengaluru engineering college	Merit, need and government scholarship options; verify with the college
+Ramaiah Institute of Technology, Bengaluru	India	Engineering and technology institute in Bengaluru	Merit, need and government scholarship options; verify with the institute
+PES University, Bengaluru	India	Private university with technology, design, business and science programmes	Merit and need-based support; verify current university policies
+KLE Technological University, Hubballi	India	Technology-focused university in Karnataka	Merit and need-based support; verify current university policies
+32. Karnataka Universities & Colleges — Health, Law, Arts and Social Sciences
+University	Country	Ranking/Reputation	Scholarships
+National Law School of India University (NLSIU), Bengaluru	India	National law university in Bengaluru	Merit support and applicable government fee waivers; verify current eligibility
+National Institute of Mental Health and Neuro Sciences (NIMHANS), Bengaluru	India	Public institute for mental health, neuroscience and related postgraduate education	Government/institute fellowships where applicable; programme-specific eligibility
+St. John's Medical College, Bengaluru	India	Medical education and health-sciences college	Institutional and government scholarship options; verify current eligibility
+Manipal Academy of Higher Education, Manipal	India	Multidisciplinary university in Karnataka with health, engineering, design and management programmes	Merit and need-based scholarships; verify current university policies
+University of Mysore, Mysuru	India	Public university offering science, humanities, education and social-science programmes	Government and university scholarships; verify current notifications
+Bangalore University, Bengaluru	India	Public university with affiliated colleges across multiple disciplines	Government and university scholarships; verify current notifications
+Christ University, Bengaluru	India	Multidisciplinary university with arts, commerce, science, law and social sciences	Merit and need-based support; verify current university policies
+St. Joseph's University, Bengaluru	India	Multidisciplinary university with arts, science, commerce and social-science programmes	Merit and need-based support; verify current university policies
+Azim Premji University, Bengaluru	India	University focused on education, development and social-sector studies	Financial aid and scholarships for eligible programmes; verify current policies
+Srishti Manipal Institute of Art, Design and Technology, Bengaluru	India	Art, design and creative-technology institute	Merit and need-based support; verify current university policies
+University of Agricultural Sciences, Bengaluru	India	Public university for agriculture, horticulture and allied sciences	ICAR, state and university scholarship options; verify current notifications
+Karnataka Veterinary, Animal and Fisheries Sciences University, Bidar	India	Public university for veterinary, animal and fisheries sciences	State, ICAR and university scholarship options; verify current notifications

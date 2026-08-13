@@ -1097,6 +1097,8 @@ def university_recommendations(extra_context: str = "") -> tuple[dict[str, str],
         "singapore": "Singapore", "japan": "Japan", "france": "France", "switzerland": "Switzerland",
     }
     country_choices = tuple(country for phrase, country in preferred_countries.items() if re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", written_answers))
+    karnataka_terms = ("karnataka", "bengaluru", "bangalore", "mysuru", "mysore", "manipal", "hubballi", "surathkal")
+    wants_karnataka = any(re.search(rf"(?<!\w){re.escape(term)}(?!\w)", written_answers) for term in karnataka_terms)
     direct_fields = [
         field for keyword, fields in CAREER_FIELD_SIGNALS.items()
         if re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", written_answers)
@@ -1112,7 +1114,8 @@ def university_recommendations(extra_context: str = "") -> tuple[dict[str, str],
         # not an unrelated US business university.
         subject_score = sum(20 if signal in direct_fields else 2 for signal in preferred_fields if signal.lower() in field)
         country_score = 3 if university["country"] in country_choices else 0
-        return country_score + subject_score
+        local_score = 12 if wants_karnataka and any(term in university["name"].lower() for term in karnataka_terms) else 0
+        return country_score + local_score + subject_score
 
     ranked_matches = sorted(UNIVERSITY_CATALOG, key=field_score, reverse=True)
     return tuple((ranked_matches or list(UNIVERSITY_CATALOG))[:3])
@@ -1130,6 +1133,7 @@ def recommended_scholarships(extra_context: str = "") -> tuple[dict[str, str], .
     context = recommendation_career_text() + " " + themes + " " + " ".join(
         str(answer).lower() for answer in st.session_state.intake_answers.values()
     ) + " " + extra_context.lower()
+    wants_karnataka = any(re.search(rf"(?<!\w){re.escape(term)}(?!\w)", context) for term in ("karnataka", "bengaluru", "bangalore", "mysuru", "mysore", "manipal", "hubballi", "surathkal"))
     scholarship_signals = {
         "stem": ("coding", "software", "data", "ai", "robot", "engineering", "science", "environment"),
         "arts": ("acting", "actor", "theatre", "film", "music", "dance", "fashion", "photography", "animation", "design", "writing"),
@@ -1152,11 +1156,14 @@ def recommended_scholarships(extra_context: str = "") -> tuple[dict[str, str], .
         }
         for university in university_recommendations(extra_context)
     ]
-    if not keywords:
+    if not keywords and not wants_karnataka:
         return tuple(university_aid + list(SCHOLARSHIP_CATALOG[:2]))
     ranked_scholarships = sorted(
         SCHOLARSHIP_CATALOG,
-        key=lambda scholarship: sum(keyword in " ".join(scholarship.values()).lower() for keyword in keywords),
+        key=lambda scholarship: (
+            (20 if wants_karnataka and "karnataka" in " ".join(scholarship.values()).lower() else 0)
+            + sum(keyword in " ".join(scholarship.values()).lower() for keyword in keywords)
+        ),
         reverse=True,
     )
     # Pair subject-aligned university aid with broader external scholarships.
