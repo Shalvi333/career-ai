@@ -20,8 +20,10 @@ import streamlit as st
 
 try:
     from openai import OpenAI
+    from openai import AuthenticationError, RateLimitError, APIConnectionError
 except ImportError:  # Lets the rest of the student project run until deploy installs the SDK.
     OpenAI = None
+    AuthenticationError = RateLimitError = APIConnectionError = Exception
 
 
 # Transparent butterfly logo: it blends into the page instead of appearing
@@ -899,9 +901,14 @@ def gpt_mentor_reply(question: str) -> tuple[str, str]:
         if not reply:
             return "", "GPT did not return a reply."
         return reply, ""
-    except Exception as error:
-        # The student sees a friendly fallback, not secret/configuration details.
-        return "", f"GPT is temporarily unavailable ({type(error).__name__})."
+    except AuthenticationError:
+        return "", "GPT could not authenticate. Check that OPENAI_API_KEY in Streamlit Secrets is a complete active API key, then save and reboot the app."
+    except RateLimitError:
+        return "", "GPT has no available API credit or has reached its usage limit. Add a small billing credit or raise the API usage limit, then try again."
+    except APIConnectionError:
+        return "", "GPT could not be reached right now. Please try again in a moment."
+    except Exception:
+        return "", "GPT is temporarily unavailable. Please check the app logs if this keeps happening."
 
 
 def fetch_scores_and_insights(student_id: str) -> tuple[list[dict[str, object]], dict[str, object], str]:
@@ -1743,8 +1750,7 @@ def render_ai_mentor() -> None:
             reply, gpt_error = gpt_mentor_reply(question.strip())
             if not reply:
                 reply = built_in_mentor_reply(question.strip())
-                if using_gpt:
-                    st.info("GPT could not be reached for this message, so Career AI used its built-in career guidance.")
+                st.warning(f"{gpt_error} Career AI has shown its built-in career guidance for this message.")
         st.session_state.mentor_history.append({"role": "student", "message": question.strip()})
         st.session_state.mentor_history.append({"role": "ai", "message": reply})
         st.rerun()
