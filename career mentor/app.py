@@ -1185,23 +1185,31 @@ def is_valid_email(email: str) -> bool:
 
 
 def is_meaningful_answer(answer: str) -> bool:
-    """Reject blank/placeholders while allowing brief factual quiz answers."""
+    """Reject blank, placeholder and obvious keyboard-mash quiz answers."""
     cleaned = answer.strip().lower()
     compact = re.sub(r"\s+", "", cleaned)
     letters = re.sub(r"[^a-z]", "", cleaned)
-    blocked = {"asdf", "asdfgh", "qwerty", "qwertyuiop", "test", "testing", "none", "na", "n/a", "idk", "xxx", "abc", "abcd"}
+    blocked = {
+        "asdf", "asdfgh", "qwerty", "qwertyuiop", "test", "testing",
+        "none", "na", "n/a", "idk", "xxx", "abc", "abcd", "random",
+        "iuhdjcknn", "jhjhjh", "fghjkl", "hjkl", "zxcv", "zxcvbn",
+    }
+    keyboard_mash_fragments = ("asdf", "qwer", "zxcv", "hjkl", "lkjh", "iuhd", "jckn", "mnbv", "poiuy")
+    valid_short_answers = {
+        "yes", "no", "y", "n", "true", "false", "maybe", "us", "usa",
+        "uk", "uae", "eu", "india", "canada", "australia", "germany",
+        "france", "japan", "china", "singapore", "male", "female", "other",
+    }
     if not cleaned or cleaned in blocked:
         return False
     # Many profile questions genuinely need concise factual responses.
-    if cleaned in {"yes", "no", "y", "n", "true", "false", "maybe"}:
+    if cleaned in valid_short_answers:
         return True
     if re.fullmatch(r"[+-]?\d+(?:\.\d+)?\s*%?", cleaned):
         return True
-    # Short country abbreviations (US, UK, UAE, etc.) are valid answers to
-    # the university-location question. The repeated-letter check still blocks
-    # obvious placeholders such as "aaa".
-    if re.fullmatch(r"[a-z]{2,3}", cleaned):
-        return True
+    # Reject common keyboard runs and obvious nonsense such as "iuhdjcknn".
+    if any(fragment in compact for fragment in keyboard_mash_fragments):
+        return False
     if len(cleaned) < 3 or (letters and len(set(letters)) == 1):
         return False
     if len(letters) < 2:
@@ -1349,7 +1357,7 @@ def render_intake() -> None:
         next_label = "Finish quiz  →" if index == len(questions) - 1 else "Next question  →"
         if st.button(next_label, use_container_width=True):
             if not is_meaningful_answer(answer):
-                st.error("Please enter a real answer. Short answers such as yes/no, a score like 85, or 92% are accepted; placeholders like “asdf” are not.")
+                st.error("Please write a meaningful answer. Yes/no, countries such as US or UK, and marks such as 85 or 92% are accepted. Random keyboard text such as “asdf” or “iuhdjcknn” is not.")
                 return
             if index == 0:
                 if not quiz_name.strip():
@@ -1528,6 +1536,32 @@ def render_dashboard() -> None:
             st.markdown("**Ask your AI Mentor**")
             st.caption("Career and education guidance whenever you need it.")
             st.button("Start a conversation", use_container_width=True, on_click=open_ai_mentor)
+
+    # RIASEC is optional: written quiz answers already produce recommendations.
+    # Keep both versions available here so students can refine them later.
+    if not st.session_state.personality_complete:
+        with st.container(border=True):
+            st.markdown("### Refine your career matches with RIASEC")
+            st.caption("Your current recommendations use your written quiz answers. Take this optional interest test whenever you are ready for an extra layer of detail.")
+            quick_col, full_col, note_col = st.columns([1, 1, 1.35], gap="medium")
+            with quick_col:
+                st.button(
+                    "Quick RIASEC quiz →",
+                    key="dashboard_riasec_short",
+                    use_container_width=True,
+                    on_click=start_personality,
+                    args=("riasec_short",),
+                )
+            with full_col:
+                st.button(
+                    "Full RIASEC quiz →",
+                    key="dashboard_riasec_long",
+                    use_container_width=True,
+                    on_click=start_personality,
+                    args=("riasec_long",),
+                )
+            with note_col:
+                st.markdown("<p class='muted'><b>Quick:</b> a fast check-in.<br><b>Full:</b> a more detailed interest profile.</p>", unsafe_allow_html=True)
     universities = university_recommendations()
     scholarships = recommended_scholarships()
     left, middle, right = st.columns(3, gap="medium")
