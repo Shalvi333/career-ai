@@ -1229,6 +1229,19 @@ def is_meaningful_answer(answer: str) -> bool:
     return True
 
 
+def intake_answer_error(index: int, answer: str) -> str:
+    """Return a student-friendly validation message, or an empty string."""
+    if not is_meaningful_answer(answer):
+        return "Please replace the random text with a meaningful answer. Examples accepted: yes/no, US or UK, 85, crochet, or a full sentence."
+    # The first question specifically requests a background summary. Requiring
+    # a number prevents a random word from being recorded as name/age/grade.
+    if index == 0:
+        words = re.findall(r"[A-Za-z]{2,}", answer)
+        if not re.search(r"\d{1,2}", answer) or len(words) < 2:
+            return "Please include your age and grade/year in the answer, for example: “Aanya, 16, Grade 11”."
+    return ""
+
+
 def render_theme_toggle() -> None:
     _, col = st.columns([5, 1])
     with col:
@@ -1367,12 +1380,13 @@ def render_intake() -> None:
             st.rerun()
     with next_col:
         next_label = "Finish quiz  →" if index == len(questions) - 1 else "Next question  →"
-        answer_is_valid = is_meaningful_answer(answer)
-        if answer.strip() and not answer_is_valid:
-            st.error("Invalid answer — please replace the random text with a meaningful answer. Examples accepted: yes/no, US or UK, 85, crochet, or a full sentence.")
+        validation_error = intake_answer_error(index, answer)
+        answer_is_valid = not validation_error
+        if answer.strip() and validation_error:
+            st.error(f"Invalid answer — {validation_error}")
         if st.button(next_label, use_container_width=True, disabled=not answer_is_valid):
-            if not is_meaningful_answer(answer):
-                st.error("Please write a meaningful answer. Yes/no, countries such as US or UK, and marks such as 85 or 92% are accepted. Random keyboard text such as “asdf” or “iuhdjcknn” is not.")
+            if validation_error:
+                st.error(f"Invalid answer — {validation_error}")
                 return
             if index == 0:
                 if not quiz_name.strip():
