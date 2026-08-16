@@ -3136,7 +3136,14 @@ def render_ai_mentor() -> None:
     for exchange in reversed(exchanges):
         for message in exchange:
             role = "You" if chat_message_role(message) == "student" else "Career AI"
-            message_text = escape(chat_message_text(message)).replace("\n", "<br>")
+            # The mentor may return Markdown emphasis and headings. The chat
+            # cards are plain-text cards, so remove Markdown markers instead
+            # of showing symbols such as ** and ### to the student.
+            readable_text = chat_message_text(message)
+            readable_text = re.sub(r"(?m)^\s*#{1,6}\s*", "", readable_text)
+            readable_text = readable_text.replace("**", "").replace("__", "")
+            readable_text = re.sub(r"(?m)^\s*[*-]\s+", "", readable_text)
+            message_text = escape(readable_text).replace("\n", "<br>")
             st.markdown(
                 f"<div class='panel'><b>{role}:</b> {message_text}</div>",
                 unsafe_allow_html=True,
