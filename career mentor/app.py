@@ -59,6 +59,8 @@ DEFAULT_ROADMAP_API_URL = "http://127.0.0.1:8000/roadmap"
 DEFAULT_SCORE_API_URL = "http://127.0.0.1:8000/score"
 DEFAULT_AUTH_API_URL = "http://127.0.0.1:8000/auth"
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
+DEFAULT_GEMINI_MODEL = "gemini-3.6-flash"
+GEMINI_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
 DEFAULT_OLLAMA_MODEL = "llama3.2"
 st.set_page_config(page_title="Career AI", page_icon=LOGO_PATH, layout="wide", initial_sidebar_state="expanded")
@@ -419,6 +421,10 @@ ROLE_SKILL_GUIDANCE = {
     "entrepreneur": ("problem discovery", "basic finance and marketing", "testing a small real idea"),
     "pilot": ("maths and physics", "situational awareness", "aviation medical and flight-training research"),
     "sports": ("sport-specific training", "fitness and recovery", "teamwork and performance analysis"),
+    "cricket": ("batting and bowling technique", "fielding and match awareness", "fitness, recovery, and consistent net practice"),
+    "cricketer": ("batting and bowling technique", "fielding and match awareness", "fitness, recovery, and consistent net practice"),
+    "football": ("ball control and passing", "speed, stamina, and recovery", "teamwork and tactical awareness"),
+    "athlete": ("sport-specific technique", "strength, conditioning, and recovery", "performance analysis and mental resilience"),
     "makeup": ("colour theory and hygiene", "practice on varied looks", "a professional photo portfolio"),
     "photography": ("camera and lighting basics", "editing", "a curated photo portfolio"),
     "music": ("consistent instrument or vocal practice", "music theory", "recorded performances"),
@@ -1340,17 +1346,25 @@ def is_career_mentor_question(question: str) -> bool:
 
 
 def is_friendly_mentor_message(question: str) -> bool:
-    """Allow a small set of natural greetings without opening off-topic chat."""
+    """Recognise greetings and ordinary conversational questions."""
     text = re.sub(r"[^a-z ]", " ", question.lower()).strip()
     greetings = {
         "hi", "hello", "hey", "good morning", "good afternoon", "good evening",
         "how are you", "how r you", "thank you", "thanks", "bye", "goodbye",
+        "what are you doing", "what are u doing", "what do you do", "who are you",
+        "what can you do", "are you real", "are you an ai",
     }
     return text in greetings
 
 
 def friendly_mentor_reply(question: str) -> str:
     text = question.lower()
+    if "what are you doing" in text or "what are u doing" in text:
+        return "I’m here and ready to chat with you! I can answer questions, explain ideas, and help you explore careers, education, universities, scholarships, and skills whenever you need me."
+    if "who are you" in text or "are you an ai" in text:
+        return "I’m Career AI, an AI mentor built to help with questions, planning, learning, and career decisions. I can also have a normal conversation and explain general topics."
+    if "what can you do" in text or "what do you do" in text:
+        return "I can answer questions, explain concepts, compare options, suggest learning steps, and help with careers, courses, universities, scholarships, skills, and study plans."
     if "how" in text:
         return "I’m doing well, thank you! I’m ready to help you explore careers, courses, colleges, universities, scholarships, skills, internships, or study plans."
     if "thank" in text:
@@ -1484,21 +1498,62 @@ def expand_short_mentor_reply(question: str, reply: str) -> str:
     skills = specific_skills or SKILLS_BY_THEME[active_theme_ranking()[0]][:3]
     career_text = ", ".join(careers[:3]) or "the career direction you are exploring"
     skills_text = ", ".join(skills[:3]) or "communication, research, and practical problem-solving"
+    lowered = question.lower()
+
+    if any(word in lowered for word in ("scholarship", "financial aid", "funding", "fee", "afford")):
+        actions = (
+            "1. **Make an eligibility checklist:** note your country, course level, marks, income criteria, and any category-specific requirements.\n"
+            "2. **Use official providers first:** shortlist scholarships from university, government, and trusted foundation websites.\n"
+            "3. **Prepare documents early:** collect marksheets, ID, income evidence, references, essays, and test scores if required.\n"
+            "4. **Track deadlines:** keep a calendar with opening date, closing date, required documents, and official application link.\n"
+            "5. **Apply broadly:** include a mix of merit, need-based, subject-specific, and location-specific options."
+        )
+        example = "For example, make one folder per scholarship and tick off each document before submitting—never rely on a social-media post for eligibility rules."
+    elif any(word in lowered for word in ("university", "universities", "college", "colleges", "campus", "admission", "apply")):
+        actions = (
+            "1. **Choose the course before the name:** compare the actual subjects, labs, placements, and specialisations offered.\n"
+            "2. **Check entry requirements:** confirm subject prerequisites, grades, tests, portfolio rules, and application dates on the official site.\n"
+            "3. **Compare total cost:** include tuition, housing, food, travel, visa, and available financial aid.\n"
+            "4. **Look for real student evidence:** attend an open day, watch department sessions, or speak with current students.\n"
+            "5. **Keep balanced choices:** apply to ambitious, realistic, and safer options that suit your country preference and budget."
+        )
+        example = "For example, two universities can offer the same degree title but have very different course modules and internship support."
+    elif any(word in lowered for word in ("skill", "skills", "learn", "learning", "certification", "certificate", "roadmap")):
+        actions = (
+            f"1. **Start with one skill:** choose **{skills_text}** rather than trying to learn everything together.\n"
+            "2. **Pick a beginner resource:** complete one short, reputable course or guided tutorial.\n"
+            "3. **Create proof of learning:** make a small project, performance, write-up, or practical task.\n"
+            "4. **Ask for feedback:** show it to a teacher, mentor, club leader, or someone working in the field.\n"
+            "5. **Increase difficulty:** use the feedback to build a stronger second project for your portfolio."
+        )
+        example = "For example, a coding learner could build a tiny useful website; an aspiring musician could record and reflect on a short performance."
+    elif any(word in lowered for word in ("resume", "cv", "interview", "portfolio", "linkedin")):
+        actions = (
+            "1. **Choose the target role:** tailor every resume, portfolio, or interview example to that role.\n"
+            "2. **Show evidence:** add projects, activities, achievements, and the result of your work—not only a list of skills.\n"
+            "3. **Use the STAR structure:** practise examples showing the situation, task, action, and result.\n"
+            "4. **Keep it clear:** use simple headings, strong action verbs, and one page for an early-career resume.\n"
+            "5. **Get a review:** ask a teacher, mentor, or professional to check it before you apply."
+        )
+        example = "For example, replace 'good communication' with a real example of organising an event, presenting research, or leading a group task."
+    else:
+        actions = (
+            "1. **Understand the role:** read two reliable role descriptions and note the tasks you would enjoy and the tasks you would not.\n"
+            "2. **Try it in a small way:** do one beginner activity such as a project, club, workshop, volunteering task, or conversation with a professional.\n"
+            f"3. **Build core skills:** start with **{skills_text}** and save evidence of your work in a simple portfolio.\n"
+            "4. **Check the study path:** compare subjects, entrance requirements, course length, cost, and certification needs for your preferred country.\n"
+            "5. **Make a comparison table:** score each option for interest, strengths, training time, work environment, and future opportunities."
+        )
+        example = f"For example, spend two weeks trying one activity connected to {topic.lower()} and ask someone in that field about a normal workday."
 
     return (
         f"{reply.strip()}\n\n"
         f"### Why this matters\n"
         f"A good decision about **{topic}** comes from comparing real day-to-day work, the training route, "
         f"and whether the work fits your strengths. Related paths worth comparing are **{career_text}**.\n\n"
-        f"### What to do next\n"
-        f"1. **Understand the role:** read two reliable role descriptions and write down the tasks you would enjoy and the tasks you would not.\n"
-        f"2. **Try it in a small way:** do one beginner activity—such as a project, school club, workshop, volunteering task, or conversation with a professional.\n"
-        f"3. **Build core skills:** start with **{skills_text}** and keep examples of your work in a simple portfolio or evidence folder.\n"
-        f"4. **Check the study path:** compare subjects, entrance requirements, course length, cost, and certification needs for your preferred country.\n"
-        f"5. **Make a comparison table:** score each option for interest, strengths, training time, work environment, and future opportunities before choosing.\n\n"
+        f"### What to do next\n{actions}\n\n"
         f"### A realistic example\n"
-        f"Instead of committing immediately, spend two weeks trying one activity connected to {topic.lower()} and ask someone in that field what a normal workday is like. "
-        f"Then use what you learn to decide on the next course, subject, or experience."
+        f"{example}"
     )
 
 
@@ -1515,6 +1570,21 @@ def openai_model() -> str:
         return str(st.secrets.get("OPENAI_MODEL", os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL))).strip()
     except FileNotFoundError:
         return os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL).strip()
+
+
+def gemini_api_key() -> str:
+    """Read the Gemini key from private Streamlit Secrets."""
+    try:
+        return str(st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))).strip()
+    except FileNotFoundError:
+        return os.getenv("GEMINI_API_KEY", "").strip()
+
+
+def gemini_model() -> str:
+    try:
+        return str(st.secrets.get("GEMINI_MODEL", os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL))).strip()
+    except FileNotFoundError:
+        return os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL).strip()
 
 
 def ollama_api_url() -> str:
@@ -1588,6 +1658,60 @@ def ollama_mentor_reply(question: str) -> tuple[str, str]:
         return "", f"Ollama could not answer right now: {error}"
 
 
+def gemini_mentor_reply(question: str) -> tuple[str, str]:
+    """Use Gemini through its OpenAI-compatible API when a Gemini key is set."""
+    api_key = gemini_api_key()
+    if not api_key:
+        return "", "No Gemini key is configured."
+    if OpenAI is None:
+        return "", "The AI compatibility package is not installed yet."
+
+    career_matches = ", ".join(career_suggestions()[:5]) or "Not available yet"
+    profile_summary = {
+        "student_name": profile_name(),
+        "quiz_answers": labelled_quiz_answers(),
+        "riasec_completed": bool(st.session_state.personality_complete),
+        "riasec_themes": [RIASEC[code][0] for code in active_theme_ranking()[:3]],
+        "suggested_careers": career_matches,
+    }
+    instructions = (
+        "You are Career AI, a warm, accurate career mentor for students. "
+        "Give a direct, personalised, detailed answer to the newest question. "
+        "Use the student profile only when helpful; the newest question matters most. "
+        "Do not repeat earlier answers or assume a different career from the profile. "
+        "Answer naturally in the format that best fits the question: paragraphs, bullets, or a short list. "
+        "Do not use a fixed template, repeated headings, or the same generic plan for every question. "
+        "Give enough explanation and specific examples to be useful, usually around 150–350 words for a meaningful question, "
+        "but be shorter when the question is simple. Be honest about uncertainty. For university, scholarships, fees, "
+        "deadlines, and entry requirements, tell the student to verify facts on the official website. "
+        "You may politely answer ordinary general questions too."
+    )
+    prompt = (
+        f"Student profile (background only):\n{json.dumps(profile_summary, ensure_ascii=False)}\n\n"
+        f"Answer only this new question, not an earlier one: {question}"
+    )
+    try:
+        client = OpenAI(
+            api_key=api_key,
+            base_url=GEMINI_OPENAI_BASE_URL,
+            timeout=35.0,
+            max_retries=0,
+        )
+        response = client.chat.completions.create(
+            model=gemini_model(),
+            messages=[
+                {"role": "system", "content": instructions},
+                {"role": "user", "content": prompt},
+            ],
+        )
+        reply = str(response.choices[0].message.content or "").strip()
+        if not reply:
+            return "", "Gemini did not return a reply."
+        return reply, ""
+    except Exception as error:
+        return "", f"Gemini request failed ({error.__class__.__name__})."
+
+
 def gpt_mentor_reply(question: str) -> tuple[str, str]:
     """Generate a safe, profile-aware response using GPT when Secrets are set."""
     api_key = openai_api_key()
@@ -1604,11 +1728,6 @@ def gpt_mentor_reply(question: str) -> tuple[str, str]:
         "riasec_themes": [RIASEC[code][0] for code in active_theme_ranking()[:3]],
         "suggested_careers": career_matches,
     }
-    history = st.session_state.mentor_history[-6:]
-    history_text = "\n".join(
-        f"{'Student' if chat_message_role(item) == 'student' else 'Mentor'}: {chat_message_text(item)}"
-        for item in history
-    )
     instructions = (
         "You are Career AI, a warm, accurate career mentor for students. "
         "Your specialty is careers, education, skills, courses, colleges/universities, "
@@ -1617,17 +1736,12 @@ def gpt_mentor_reply(question: str) -> tuple[str, str]:
         "Use the supplied student profile where useful, but do not invent marks, rankings, scholarship deadlines, "
         "admissions requirements, or facts. Do not guarantee outcomes. Give practical next steps. "
         "For scholarships and university applications, remind the student to verify current eligibility, fees, deadlines, "
-        "and official information. Answer the newest question directly and do not reuse an "
-        "earlier response for a different career or topic. For any meaningful question, you MUST use this exact "
-        "format: (1) a two-sentence direct answer, (2) 'Why this matters' with a clear explanation, "
-        "(3) 'What to do next' containing at least five numbered actions, and (4) one short realistic note or example. "
-        "Write at least 180 words unless the student only says a greeting such as 'hi'. Never answer a substantive "
-        "career, education, health-career, university, scholarship, skill, or course question in only one paragraph."
+        "and official information. The direct question is more important than the profile. Do not answer based on an "
+        "older question or repeat a previous reply. Answer naturally rather than following a fixed response template."
     )
     prompt = (
-        f"Student profile:\n{json.dumps(profile_summary, ensure_ascii=False)}\n\n"
-        f"Recent conversation:\n{history_text or 'No previous messages.'}\n\n"
-        f"Student question: {question}"
+        f"Student profile (background only):\n{json.dumps(profile_summary, ensure_ascii=False)}\n\n"
+        f"Answer only this new question, not any earlier question: {question}"
     )
     try:
         # Avoid long automatic retries. If GPT is temporarily unavailable, the
@@ -1649,8 +1763,10 @@ def gpt_mentor_reply(question: str) -> tuple[str, str]:
         return "", "GPT has no available API credit or has reached its usage limit. Add a small billing credit or raise the API usage limit, then try again."
     except APIConnectionError:
         return "", "GPT could not be reached right now. Please try again in a moment."
-    except Exception:
-        return "", "GPT is temporarily unavailable. Please check the app logs if this keeps happening."
+    except Exception as error:
+        # Keep the visible error safe, but retain the error type so the UI can
+        # truthfully say when it used local guidance instead of GPT.
+        return "", f"GPT request failed ({error.__class__.__name__})."
 
 
 def fetch_scores_and_insights(student_id: str) -> tuple[list[dict[str, object]], dict[str, object], str]:
@@ -2952,8 +3068,24 @@ def render_dashboard() -> None:
 
 def render_ai_mentor() -> None:
     st.markdown("<div class='top-title'>AI Mentor</div><div class='top-subtitle'>Career and education guidance only.</div><div class='ai-card'><h3>Ask a career-focused question</h3><p>I can help with careers, skills, courses, universities, scholarships, and internships. For unrelated topics, I’ll politely guide you back.</p></div>", unsafe_allow_html=True)
+    using_gemini = bool(gemini_api_key() and OpenAI is not None)
     using_gpt = bool(openai_api_key() and OpenAI is not None)
-    st.caption("GPT is ready to personalise career guidance from your quiz profile." if using_gpt else f"Ollama model active: {ollama_model()}. If Ollama cannot answer, Career AI uses built-in guidance.")
+    if using_gemini:
+        st.caption(f"Gemini is ready to personalise career guidance using {gemini_model()}.")
+    elif using_gpt:
+        st.caption("GPT is ready to personalise career guidance from your quiz profile.")
+    else:
+        st.caption(f"Ollama model active: {ollama_model()}. If Ollama cannot answer, Career AI uses built-in guidance.")
+
+    def ask_selected_model(new_question: str) -> tuple[str, str]:
+        # Use exactly one configured model. This avoids a slow chain of failed
+        # requests and prevents a depleted OpenAI account overriding Gemini.
+        if using_gemini:
+            return gemini_mentor_reply(new_question)
+        if using_gpt:
+            return gpt_mentor_reply(new_question)
+        return ollama_mentor_reply(new_question)
+
     if st.button("Clear conversation", key="mentor_clear_history"):
         st.session_state.mentor_history = []
         save_current_student_state()
@@ -2962,39 +3094,44 @@ def render_ai_mentor() -> None:
         question = st.text_input("Ask your question", placeholder="Which skills should I build for UX design?")
         asked = st.form_submit_button("Ask AI Mentor  →", use_container_width=True)
     if asked:
+        source_note = ""
+        model_error = ""
         if not question.strip():
             st.error("Please type a career or education question before submitting.")
         elif is_friendly_mentor_message(question):
             reply = friendly_mentor_reply(question)
         elif not is_career_mentor_question(question):
-            # General questions can use the configured AI model as well. The
-            # built-in response remains intentionally cautious when no model
-            # is reachable, because it cannot safely invent broad facts.
-            reply, gpt_error = gpt_mentor_reply(question.strip())
-            if not reply and not using_gpt:
-                reply, ollama_error = ollama_mentor_reply(question.strip())
+            # General questions can use the configured AI model too.
+            reply, model_error = ask_selected_model(question.strip())
             if not reply:
                 reply = built_in_general_reply(question.strip())
+                reason = f" ({model_error})" if model_error else ""
+                source_note = f"This reply is using Career AI’s local guidance because the selected AI model did not respond{reason}."
         else:
-            reply, gpt_error = gpt_mentor_reply(question.strip())
-            if not reply and not using_gpt:
-                reply, ollama_error = ollama_mentor_reply(question.strip())
+            reply, model_error = ask_selected_model(question.strip())
             if not reply:
                 reply = built_in_mentor_reply(question.strip())
+                reason = f" ({model_error})" if model_error else ""
+                source_note = f"This reply is using Career AI’s local guidance because the selected AI model did not respond{reason}."
         if question.strip():
-            reply = expand_short_mentor_reply(question.strip(), reply)
-            if mentor_reply_is_repeated(reply):
+            is_greeting = is_friendly_mentor_message(question)
+            if not is_greeting and mentor_reply_is_repeated(reply):
                 reply = non_repeating_career_reply(question.strip())
-                reply = expand_short_mentor_reply(question.strip(), reply)
                 if mentor_reply_is_repeated(reply):
                     reply += " This is a fresh follow-up plan rather than a repeat of your earlier answer."
+            # Compare the original AI reply before adding the detailed local
+            # plan. Otherwise the shared plan itself makes different answers
+            # look identical and causes an unnecessary replacement.
             st.session_state.mentor_history.append({"role": "student", "message": question.strip()})
             st.session_state.mentor_history.append({"role": "ai", "message": reply})
+            st.session_state.mentor_last_source_note = source_note
             save_current_student_state()
             st.rerun()
     # Keep each question/reply together, but show the most recent exchange
     # first so students do not need to scroll down for the latest guidance.
     history = st.session_state.mentor_history
+    if st.session_state.get("mentor_last_source_note"):
+        st.caption(st.session_state.mentor_last_source_note)
     exchanges = [history[position:position + 2] for position in range(0, len(history), 2)]
     for exchange in reversed(exchanges):
         for message in exchange:
