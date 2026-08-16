@@ -1456,10 +1456,50 @@ def built_in_mentor_reply(question: str) -> str:
     if any(word in text for word in ("benefit", "benefits", "advantage", "advantages", "good", "pros", "why become", "why be")) and topic != "your selected career direction":
         return f"Potential benefits of becoming a {topic.lower()} include meaningful work in that field, the chance to build specialist expertise, varied career paths as you gain experience, and opportunities to make an impact. It also has real demands—training time, workload, competition, and responsibility—so try a small related activity or speak with someone in the field before deciding."
     if any(word in text for word in ("career", "job", "profession", "work", "role", "future", "coding", "design", "acting", "doctor", "engineer", "business", "psychology", "writer", "artist")):
-        return f"For {topic}, relevant paths include: {focus}. To choose between them, try one small real activity for each—such as a project, club, shadowing opportunity, short course, or conversation with someone in that field—and notice which work you keep wanting to return to."
+        return (
+            f"For {topic}, relevant paths include: {focus}. Here is a practical way to explore them:\n\n"
+            "1. Learn the real day-to-day work: read official course pages and watch or speak to people in the field.\n"
+            "2. Check the education route: identify the school subjects, entrance requirements, degree or certification needed in your country.\n"
+            "3. Build one beginner skill: complete a short course, club activity, project, portfolio piece, or volunteering experience.\n"
+            "4. Get real exposure: try shadowing, an internship, a competition, or a conversation with a professional.\n"
+            "5. Compare your options: note which path fits your interests, strengths, preferred work style, training time, and budget.\n\n"
+            "Do not decide from one activity alone. Try at least two small experiences and keep evidence of what you learned."
+        )
     if topic != "your selected career direction":
         return f"For {topic}, start by exploring what the day-to-day work is really like, which qualifications are needed, the skills employers value, and the work environment you would prefer. The related paths in your catalogue are: {focus}. Try one small project, course, club, or conversation with someone in the field before making a long-term decision."
     return "I’m here for career and education guidance. Ask me about careers, courses, skills, universities, scholarships, resumes, interviews, or a learning roadmap, and I’ll help you plan the next step."
+
+
+def expand_short_mentor_reply(question: str, reply: str) -> str:
+    """Keep mentor answers useful even when an AI provider returns only one line.
+
+    This runs locally, so it adds no extra API wait or API cost.  The original
+    answer remains first, followed by a practical plan tailored to the topic.
+    """
+    if len(reply.split()) >= 120:
+        return reply
+
+    topic, suggested_careers, specific_skills = mentor_topic(question)
+    careers = suggested_careers or career_suggestions()[:3]
+    skills = specific_skills or SKILLS_BY_THEME[active_theme_ranking()[0]][:3]
+    career_text = ", ".join(careers[:3]) or "the career direction you are exploring"
+    skills_text = ", ".join(skills[:3]) or "communication, research, and practical problem-solving"
+
+    return (
+        f"{reply.strip()}\n\n"
+        f"### Why this matters\n"
+        f"A good decision about **{topic}** comes from comparing real day-to-day work, the training route, "
+        f"and whether the work fits your strengths. Related paths worth comparing are **{career_text}**.\n\n"
+        f"### What to do next\n"
+        f"1. **Understand the role:** read two reliable role descriptions and write down the tasks you would enjoy and the tasks you would not.\n"
+        f"2. **Try it in a small way:** do one beginner activity—such as a project, school club, workshop, volunteering task, or conversation with a professional.\n"
+        f"3. **Build core skills:** start with **{skills_text}** and keep examples of your work in a simple portfolio or evidence folder.\n"
+        f"4. **Check the study path:** compare subjects, entrance requirements, course length, cost, and certification needs for your preferred country.\n"
+        f"5. **Make a comparison table:** score each option for interest, strengths, training time, work environment, and future opportunities before choosing.\n\n"
+        f"### A realistic example\n"
+        f"Instead of committing immediately, spend two weeks trying one activity connected to {topic.lower()} and ask someone in that field what a normal workday is like. "
+        f"Then use what you learn to decide on the next course, subject, or experience."
+    )
 
 
 def openai_api_key() -> str:
@@ -1504,10 +1544,11 @@ def ollama_mentor_reply(question: str) -> tuple[str, str]:
         "You are Career AI, a warm and accurate career mentor for students. "
         "Your specialty is careers, education, skills, courses, universities, scholarships, "
         "internships, portfolios, resumes, interviews, and study plans. You may also answer "
-        "ordinary general questions politely and briefly. "
+        "ordinary general questions politely and helpfully. "
         "Use the student profile where useful, but never invent marks, rankings, admission "
-        "requirements, scholarship deadlines, fees, or guarantees. Give a concise answer "
-        "with practical next steps, and say to check official sources for current requirements. "
+        "requirements, scholarship deadlines, fees, or guarantees. For meaningful questions, give a detailed but "
+        "easy-to-read answer of at least 150 words with an explanation, examples, and 3 to 5 practical next steps. "
+        "Say to check official sources for current requirements. "
         "Answer the newest question directly. Do not reuse an earlier answer, even if the "
         "student has a different career interest from their saved profile."
     )
@@ -1572,12 +1613,16 @@ def gpt_mentor_reply(question: str) -> tuple[str, str]:
         "You are Career AI, a warm, accurate career mentor for students. "
         "Your specialty is careers, education, skills, courses, colleges/universities, "
         "scholarships, internships, portfolios, resumes, interviews, and study plans. "
-        "You may also answer ordinary general questions politely and briefly. "
+        "You may also answer ordinary general questions politely and helpfully. "
         "Use the supplied student profile where useful, but do not invent marks, rankings, scholarship deadlines, "
-        "admissions requirements, or facts. Do not guarantee outcomes. Give practical, concise next steps. "
+        "admissions requirements, or facts. Do not guarantee outcomes. Give practical next steps. "
         "For scholarships and university applications, remind the student to verify current eligibility, fees, deadlines, "
         "and official information. Answer the newest question directly and do not reuse an "
-        "earlier response for a different career or topic."
+        "earlier response for a different career or topic. For any meaningful question, you MUST use this exact "
+        "format: (1) a two-sentence direct answer, (2) 'Why this matters' with a clear explanation, "
+        "(3) 'What to do next' containing at least five numbered actions, and (4) one short realistic note or example. "
+        "Write at least 180 words unless the student only says a greeting such as 'hi'. Never answer a substantive "
+        "career, education, health-career, university, scholarship, skill, or course question in only one paragraph."
     )
     prompt = (
         f"Student profile:\n{json.dumps(profile_summary, ensure_ascii=False)}\n\n"
@@ -1585,12 +1630,14 @@ def gpt_mentor_reply(question: str) -> tuple[str, str]:
         f"Student question: {question}"
     )
     try:
-        client = OpenAI(api_key=api_key)
+        # Avoid long automatic retries. If GPT is temporarily unavailable, the
+        # app immediately gives the student a detailed local guide instead.
+        client = OpenAI(api_key=api_key, timeout=25.0, max_retries=0)
         response = client.responses.create(
             model=openai_model(),
             instructions=instructions,
             input=prompt,
-            max_output_tokens=500,
+            max_output_tokens=800,
         )
         reply = (response.output_text or "").strip()
         if not reply:
@@ -2906,7 +2953,7 @@ def render_dashboard() -> None:
 def render_ai_mentor() -> None:
     st.markdown("<div class='top-title'>AI Mentor</div><div class='top-subtitle'>Career and education guidance only.</div><div class='ai-card'><h3>Ask a career-focused question</h3><p>I can help with careers, skills, courses, universities, scholarships, and internships. For unrelated topics, I’ll politely guide you back.</p></div>", unsafe_allow_html=True)
     using_gpt = bool(openai_api_key() and OpenAI is not None)
-    st.caption("GPT is using your quiz profile to personalise career guidance." if using_gpt else f"Ollama model active: {ollama_model()}. If Ollama cannot answer, Career AI uses built-in guidance.")
+    st.caption("GPT is ready to personalise career guidance from your quiz profile." if using_gpt else f"Ollama model active: {ollama_model()}. If Ollama cannot answer, Career AI uses built-in guidance.")
     if st.button("Clear conversation", key="mentor_clear_history"):
         st.session_state.mentor_history = []
         save_current_student_state()
@@ -2924,28 +2971,21 @@ def render_ai_mentor() -> None:
             # built-in response remains intentionally cautious when no model
             # is reachable, because it cannot safely invent broad facts.
             reply, gpt_error = gpt_mentor_reply(question.strip())
-            if not reply:
+            if not reply and not using_gpt:
                 reply, ollama_error = ollama_mentor_reply(question.strip())
-            else:
-                ollama_error = ""
             if not reply:
                 reply = built_in_general_reply(question.strip())
-                st.caption("Using the built-in response while the optional AI model is unavailable.")
         else:
             reply, gpt_error = gpt_mentor_reply(question.strip())
-            if not reply:
+            if not reply and not using_gpt:
                 reply, ollama_error = ollama_mentor_reply(question.strip())
-            else:
-                ollama_error = ""
             if not reply:
                 reply = built_in_mentor_reply(question.strip())
-                if gpt_error == "No OpenAI key is configured.":
-                    st.caption("Using the built-in career guidance while the optional AI model is unavailable.")
-                else:
-                    st.caption("Using the built-in career guidance while the optional AI model is unavailable.")
         if question.strip():
+            reply = expand_short_mentor_reply(question.strip(), reply)
             if mentor_reply_is_repeated(reply):
                 reply = non_repeating_career_reply(question.strip())
+                reply = expand_short_mentor_reply(question.strip(), reply)
                 if mentor_reply_is_repeated(reply):
                     reply += " This is a fresh follow-up plan rather than a repeat of your earlier answer."
             st.session_state.mentor_history.append({"role": "student", "message": question.strip()})
@@ -2959,8 +2999,9 @@ def render_ai_mentor() -> None:
     for exchange in reversed(exchanges):
         for message in exchange:
             role = "You" if chat_message_role(message) == "student" else "Career AI"
+            message_text = escape(chat_message_text(message)).replace("\n", "<br>")
             st.markdown(
-                f"<div class='panel'><b>{role}:</b> {escape(chat_message_text(message))}</div>",
+                f"<div class='panel'><b>{role}:</b> {message_text}</div>",
                 unsafe_allow_html=True,
             )
 
