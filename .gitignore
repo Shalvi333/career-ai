@@ -157,6 +157,14 @@ activemq-data/
 # Environments
 .env
 .envrc
+.streamlit/secrets.toml
+.streamlit/screts.toml
+**/.streamlit/secrets.toml
+**/.streamlit/screts.toml
+*.db
+*.sqlite
+*.sqlite3
+*.zip
 .venv
 env/
 venv/

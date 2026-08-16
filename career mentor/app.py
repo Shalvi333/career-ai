@@ -6,17 +6,36 @@ Mentor Question Bank. Answers stay only in this Streamlit browser session.
 
 from __future__ import annotations
 
+from difflib import SequenceMatcher, get_close_matches
 from html import escape
 import json
 import os
 import random
 import re
+import sys
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 import streamlit as st
+
+# The root app.py launches this file with runpy. Include this folder on the
+# import path so database.py can be imported both locally and on Streamlit.
+APP_DIRECTORY = Path(__file__).resolve().parent
+if str(APP_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(APP_DIRECTORY))
+
+from database import (
+    authenticate_user,
+    create_user,
+    delete_user,
+    initialise_database,
+    list_users,
+    load_student_state,
+    save_student_state,
+    update_user_password,
+)
 
 try:
     from openai import OpenAI
@@ -40,10 +59,13 @@ DEFAULT_ROADMAP_API_URL = "http://127.0.0.1:8000/roadmap"
 DEFAULT_SCORE_API_URL = "http://127.0.0.1:8000/score"
 DEFAULT_AUTH_API_URL = "http://127.0.0.1:8000/auth"
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
+DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
+DEFAULT_OLLAMA_MODEL = "llama3.2"
 st.set_page_config(page_title="Career AI", page_icon=LOGO_PATH, layout="wide", initial_sidebar_state="expanded")
+initialise_database()
 
-PAGES = ("Dashboard", "Explore Careers", "Skill Roadmap", "Scholarships", "Universities", "AI Mentor")
-PAGE_ICONS = {"Dashboard": "⌂", "Explore Careers": "⌕", "Skill Roadmap": "↗", "Scholarships": "🦋", "Universities": "♜", "AI Mentor": "🦋"}
+PAGES = ("Dashboard", "Explore Careers", "Skill Roadmap", "Scholarships", "Universities", "AI Mentor", "Change Password")
+PAGE_ICONS = {"Dashboard": "⌂", "Explore Careers": "⌕", "Skill Roadmap": "↗", "Scholarships": "🦋", "Universities": "♜", "AI Mentor": "🦋", "Change Password": "🔒", "Admin": "⚙"}
 GLOBAL_UNIVERSITY_COUNTRIES = (
     "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria",
     "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan", "Bolivia",
@@ -319,7 +341,9 @@ DIRECT_CAREER_KEYWORDS = {
     "accounting": ("Accountant", "Auditor (Internal/External)", "Financial Analyst"), "economics": ("Economist", "Financial Analyst", "Policy Analyst"),
     "engineering": ("Mechanical Engineer", "Civil Engineer", "Electrical Engineer"), "architecture": ("Architect", "Urban Planner", "Interior Designer"),
     "environment": ("Environmental Scientist", "Sustainability Consultant", "Conservation Scientist"), "science": ("Research Scientist", "Biotechnologist", "Laboratory Technician"),
-    "sports": ("Sports Coach", "Sports Psychologist", "Physiotherapist"), "cricket": ("Cricketer", "Sports Coach", "Sports Journalist"),
+    "sports": ("Sports Coach", "Sports Psychologist", "Physiotherapist"), "sport": ("Sports Coach", "Sports Psychologist", "Physiotherapist"), "cricket": ("Cricketer", "Sports Coach", "Sports Journalist"),
+    "football": ("Footballer", "Sports Coach", "Sports Analyst"), "athlete": ("Professional Athlete", "Sports Coach", "Sports Physiotherapist"), "coach": ("Sports Coach", "Sports Analyst", "Sports Psychologist"),
+    "physical education": ("Physical Education Teacher", "Sports Coach", "Fitness Instructor"),
     "chef": ("Chef", "Food Scientist", "Restaurant Manager"), "travel": ("Travel Consultant", "Hotel Manager", "Tourism Manager"),
     "cooking": ("Chef", "Food Scientist", "Restaurant Manager"), "cook": ("Chef", "Food Technologist", "Restaurant Manager"), "baking": ("Baker", "Pastry Chef", "Food Scientist"), "baker": ("Baker", "Pastry Chef", "Food Technologist"),
     "pilot": ("Pilot", "Aerospace Engineer", "Air Traffic Controller"),
@@ -350,6 +374,24 @@ DIRECT_CAREER_KEYWORDS = {
     "interior": ("Interior Designer", "Architect", "Set Designer"), "jewellery": ("Jewellery Designer", "Goldsmith", "Product Designer"), "jewelry": ("Jewellery Designer", "Goldsmith", "Product Designer"),
     "history": ("Historian", "Archaeologist", "Museum Curator"), "archaeology": ("Archaeologist", "Museum Curator", "Anthropologist"),
     "religion": ("Religious Minister / Clergy", "Community Organizer", "Counselor (Mental Health)"), "counselling": ("Counsellor", "Psychologist", "Career Counselor"),
+}
+
+# Students naturally use different forms of the same hobby.  Keep one
+# canonical career mapping above, then recognise common everyday variants
+# here.  For example, "I love dancing and sketching" should surface both
+# performing-arts and visual-design careers rather than only a generic Artist.
+DIRECT_CAREER_ALIASES = {
+    "dance": ("dancing", "dancer", "choreography", "choreograph", "ballet", "hip hop", "hip-hop"),
+    "drawing": ("drawings", "sketch", "sketching", "illustration", "illustrating", "digital art"),
+    "painting": ("paintings", "painter"),
+    "music": ("singing", "singer", "song", "songs", "songwriting", "songwriter"),
+    "acting": ("actress", "performing", "performance", "performer", "audition"),
+    "photography": ("photographer", "photos", "photo editing"),
+    "cooking": ("culinary", "cuisine", "cooked"),
+    "coding": ("code", "programmer", "programmers"),
+    "sports": ("athletic", "athletics", "sporting"),
+    "plant": ("plants", "gardening", "garden", "botany"),
+    "animal": ("animals", "pets", "wildlife"),
 }
 
 # Specific next skills for common careers. These make the no-cost mentor
@@ -404,14 +446,17 @@ CAREER_FIELD_SIGNALS = {
     "doctor": ("Healthcare", "Medicine"), "medicine": ("Healthcare", "Medicine"), "nurse": ("Healthcare",), "psychology": ("Healthcare", "Social Services"), "therapy": ("Healthcare", "Social Services"),
     "teacher": ("Education",), "education": ("Education",), "law": ("Law",), "business": ("Business",), "marketing": ("Marketing", "Business"), "finance": ("Business", "Finance"), "accounting": ("Business", "Finance"),
     "engineering": ("Engineering", "Technology"), "architecture": ("Engineering", "Arts"), "environment": ("Environment", "Science"), "science": ("Science", "Research"),
-    "sports": ("Sports", "Healthcare"), "cricket": ("Sports",), "chef": ("Hospitality",), "travel": ("Hospitality", "Tourism"), "pilot": ("Transportation", "Engineering"),
+    # Sports interests must first show sports-performance/coaching universities,
+    # rather than generic healthcare options. Health is kept only for an
+    # explicitly health profession such as physiotherapy or sports medicine.
+    "sports": ("Sports",), "sport": ("Sports",), "cricket": ("Sports",), "football": ("Sports",), "athlete": ("Sports",), "coach": ("Sports",), "physical education": ("Sports",), "fitness": ("Sports",), "yoga": ("Sports",), "physiotherapy": ("Sports", "Healthcare"), "sports medicine": ("Sports", "Healthcare"), "chef": ("Hospitality",), "travel": ("Hospitality", "Tourism"), "pilot": ("Transportation", "Engineering"),
     "cooking": ("Hospitality", "Science"), "cook": ("Hospitality",), "baking": ("Hospitality", "Science"), "baker": ("Hospitality",),
     "social work": ("Social Services",), "politics": ("Government", "Public Policy"),
     "poetry": ("Writing", "Media"), "poet": ("Writing", "Media"), "journalism": ("Media", "Writing"), "translation": ("Education", "Writing"),
     "scientist": ("Science", "Research"), "biology": ("Science", "Research"), "chemistry": ("Science", "Research"), "physics": ("Science", "Research"), "space": ("Science", "Engineering"), "astronomy": ("Science", "Research"),
     "plant": ("Agriculture", "Environment", "Science"), "plants": ("Agriculture", "Environment", "Science"), "plansts": ("Agriculture", "Environment", "Science"), "botany": ("Science", "Environment"), "botanist": ("Science", "Environment"), "gardening": ("Agriculture", "Environment"), "garden": ("Agriculture", "Environment"), "horticulture": ("Agriculture", "Environment"),
     "animals": ("Healthcare", "Environment"), "animal": ("Healthcare", "Environment"), "wildlife": ("Environment", "Science"), "agriculture": ("Agriculture", "Science"), "farming": ("Agriculture",), "food": ("Hospitality", "Science"),
-    "beauty": ("Beauty", "Arts"), "makeup": ("Beauty", "Arts"), "hair": ("Beauty",), "fitness": ("Sports", "Healthcare"), "yoga": ("Sports", "Healthcare"),
+    "beauty": ("Beauty", "Arts"), "makeup": ("Beauty", "Arts"), "hair": ("Beauty",),
     "defence": ("Government", "Engineering"), "defense": ("Government", "Engineering"), "police": ("Government", "Security"), "security": ("Security", "Technology"), "firefighter": ("Government", "Security"),
     "real estate": ("Real Estate", "Business"), "retail": ("Retail", "Business"), "marine": ("Science", "Transportation"), "aviation": ("Transportation", "Engineering"),
     "car": ("Engineering", "Transportation"), "mechanic": ("Engineering", "Skilled Trades"), "electrician": ("Engineering", "Skilled Trades"), "construction": ("Engineering", "Skilled Trades"),
@@ -476,6 +521,106 @@ def load_university_data() -> tuple[tuple[dict[str, str], ...], tuple[dict[str, 
 
 UNIVERSITY_CATALOG, SCHOLARSHIP_CATALOG = load_university_data()
 
+# Extra well-known study options make the built-in catalogue more useful when
+# the public worldwide directory is offline. They are intentionally labelled
+# as programme areas, not rankings, and users can open the official site from
+# the app to verify current courses, admissions and funding.
+EXTRA_UNIVERSITIES = (
+    ("University of Tokyo", "Japan", "Technology, Science, Medicine, Arts", "Major national research university", "MEXT and university scholarships"),
+    ("Kyoto University", "Japan", "Science, Engineering, Medicine, Humanities", "Major national research university", "MEXT and university scholarships"),
+    ("Osaka University", "Japan", "Engineering, Medicine, Science", "National research university", "MEXT and university scholarships"),
+    ("Tohoku University", "Japan", "Engineering, Materials, Science", "National research university", "MEXT and university scholarships"),
+    ("Waseda University", "Japan", "Business, Media, Technology, Arts", "Comprehensive private university", "MEXT and university scholarships"),
+    ("Seoul National University", "South Korea", "Technology, Science, Medicine, Business", "Major national university", "Global Korea Scholarship and university aid"),
+    ("KAIST", "South Korea", "Technology, Engineering, Science", "Science and technology institute", "Global Korea Scholarship and KAIST aid"),
+    ("Yonsei University", "South Korea", "Business, Media, Health, Arts", "Comprehensive private university", "Global Korea Scholarship and university aid"),
+    ("Tsinghua University", "China", "Engineering, Technology, Science, Business", "Major research university", "Chinese Government Scholarship and university aid"),
+    ("Peking University", "China", "Science, Medicine, Humanities, Business", "Major comprehensive university", "Chinese Government Scholarship and university aid"),
+    ("Fudan University", "China", "Medicine, Business, Science, Media", "Major comprehensive university", "Chinese Government Scholarship and university aid"),
+    ("University of Hong Kong", "Hong Kong", "Business, Medicine, Law, Technology", "Comprehensive university", "Hong Kong PhD Fellowship and university aid"),
+    ("University of Malaya", "Malaysia", "Engineering, Medicine, Business, Arts", "Public research university", "Malaysia International Scholarship and university aid"),
+    ("Universiti Putra Malaysia", "Malaysia", "Agriculture, Environment, Veterinary, Science", "Public research university", "Malaysia International Scholarship and university aid"),
+    ("Chulalongkorn University", "Thailand", "Business, Engineering, Medicine, Arts", "Comprehensive university", "Thai and university scholarships"),
+    ("University of Indonesia", "Indonesia", "Medicine, Engineering, Social Sciences, Business", "Public university", "Indonesian and university scholarships"),
+    ("University of the Philippines Diliman", "Philippines", "Arts, Engineering, Science, Social Sciences", "Public university", "University and government scholarships"),
+    ("National Taiwan University", "Taiwan", "Technology, Medicine, Agriculture, Business", "Comprehensive university", "Taiwan Scholarship and university aid"),
+    ("Indian Institute of Technology Kharagpur", "India", "Engineering, Technology, Science", "Institute of national importance", "Institute and government scholarships"),
+    ("National Institute of Fashion Technology", "India", "Fashion, Textile, Design", "National design institute", "Merit-cum-means and government scholarships"),
+    ("National Institute of Design", "India", "Product, Communication, Textile, Film Design", "National design institute", "Institute and government scholarships"),
+    ("University of Delhi", "India", "Arts, Science, Commerce, Law, Social Sciences", "Large public university", "University and government scholarships"),
+    ("University of British Columbia", "Canada", "Technology, Science, Arts, Business", "Public research university", "International Scholars and university aid"),
+    ("McGill University", "Canada", "Medicine, Science, Arts, Music", "Public research university", "Entrance scholarships and university aid"),
+    ("University of Waterloo", "Canada", "Technology, Engineering, Mathematics", "Co-op and research university", "International student scholarships"),
+    ("University of Melbourne", "Australia", "Medicine, Arts, Business, Science", "Research university", "Melbourne scholarships and Australia Awards"),
+    ("University of Sydney", "Australia", "Health, Technology, Arts, Business", "Research university", "Sydney scholarships and Australia Awards"),
+    ("Australian National University", "Australia", "Science, Public Policy, International Relations", "National research university", "ANU and Australia Awards scholarships"),
+    ("Technical University of Munich", "Germany", "Engineering, Technology, Science, Business", "Technical research university", "DAAD and university scholarships"),
+    ("Heidelberg University", "Germany", "Medicine, Science, Humanities", "Research university", "DAAD and university scholarships"),
+    ("RWTH Aachen University", "Germany", "Engineering, Technology, Science", "Technical university", "DAAD and university scholarships"),
+    ("Delft University of Technology", "Netherlands", "Engineering, Design, Architecture", "Technical university", "Holland Scholarship and university aid"),
+    ("University of Amsterdam", "Netherlands", "Social Sciences, Media, Business, Humanities", "Research university", "Amsterdam Merit Scholarship and university aid"),
+    ("KTH Royal Institute of Technology", "Sweden", "Engineering, Technology, Design", "Technical university", "Swedish Institute and KTH scholarships"),
+    ("Uppsala University", "Sweden", "Medicine, Science, Humanities", "Research university", "Swedish Institute and university scholarships"),
+    ("University of Helsinki", "Finland", "Science, Education, Arts, Technology", "Research university", "Finland scholarships and tuition waivers"),
+    ("Aalto University", "Finland", "Design, Architecture, Technology, Business", "Design and technology university", "Finland scholarships and tuition waivers"),
+    ("Sciences Po", "France", "Politics, International Relations, Law, Social Sciences", "Specialist social-sciences university", "Eiffel and Sciences Po scholarships"),
+    ("École Polytechnique", "France", "Engineering, Mathematics, Technology", "Engineering school", "Eiffel and university scholarships"),
+    ("University of Bologna", "Italy", "Arts, Law, Engineering, Medicine", "Historic public university", "Italian government and university scholarships"),
+    ("Politecnico di Milano", "Italy", "Architecture, Design, Engineering", "Technical university", "Italian government and university scholarships"),
+    ("University of Barcelona", "Spain", "Medicine, Science, Arts, Business", "Public research university", "Spanish and university scholarships"),
+    ("University of Lisbon", "Portugal", "Engineering, Arts, Science, Business", "Public university", "Portuguese and university scholarships"),
+    ("ETH Lausanne (EPFL)", "Switzerland", "Engineering, Technology, Science", "Technical research university", "Excellence Fellowships and university aid"),
+    ("University of Oxford", "UK", "Arts, Science, Medicine, Law, Business", "Comprehensive university", "Rhodes, Clarendon and college scholarships"),
+    ("University of Cambridge", "UK", "Arts, Science, Engineering, Medicine", "Comprehensive university", "Gates Cambridge and university scholarships"),
+    ("University College London", "UK", "Architecture, Arts, Medicine, Technology", "Comprehensive university", "UCL Global Excellence scholarships"),
+    ("University of Manchester", "UK", "Engineering, Science, Business, Social Sciences", "Research university", "University scholarships and Chevening"),
+    ("Imperial College London", "UK", "Engineering, Medicine, Science, Business", "STEM-focused university", "Imperial scholarships and Chevening"),
+    ("University of Cape Town", "South Africa", "Health, Science, Law, Arts", "Research university", "University and external scholarships"),
+    ("University of Nairobi", "Kenya", "Agriculture, Health, Engineering, Business", "Public university", "University and government scholarships"),
+    ("University of Ghana", "Ghana", "Health, Science, Business, Social Sciences", "Public university", "University and external scholarships"),
+    ("American University in Cairo", "Egypt", "Business, Media, Engineering, Social Sciences", "Comprehensive university", "University scholarships"),
+    ("University of São Paulo", "Brazil", "Medicine, Engineering, Arts, Agriculture", "Public research university", "University and government scholarships"),
+    ("Tecnológico de Monterrey", "Mexico", "Technology, Business, Design, Engineering", "Private university", "Merit and need-based scholarships"),
+    ("University of Buenos Aires", "Argentina", "Medicine, Law, Arts, Science", "Public university", "Public tuition and university support"),
+    ("Universidad de Chile", "Chile", "Science, Engineering, Arts, Medicine", "Public research university", "University and government scholarships"),
+    ("Middle East Technical University", "Turkey", "Engineering, Technology, Architecture", "Public technical university", "Türkiye Scholarships and university aid"),
+    ("Istanbul Technical University", "Turkey", "Engineering, Architecture, Design", "Technical university", "Türkiye Scholarships and university aid"),
+    ("Hamad Bin Khalifa University", "Qatar", "Technology, Law, Public Policy, Islamic Studies", "Research university", "Qatar Foundation scholarships"),
+    ("United Arab Emirates University", "United Arab Emirates", "Engineering, Medicine, Business, Education", "National university", "University scholarships"),
+    ("King Abdullah University of Science and Technology", "Saudi Arabia", "Science, Engineering, Technology", "Graduate research university", "KAUST fellowships"),
+    ("University of Auckland", "New Zealand", "Engineering, Health, Arts, Business", "Research university", "University scholarships"),
+)
+
+_all_universities = UNIVERSITY_CATALOG + tuple(
+    {"field": field, "name": name, "country": country, "reputation": reputation, "scholarships": scholarships}
+    for name, country, field, reputation, scholarships in EXTRA_UNIVERSITIES
+)
+UNIVERSITY_CATALOG = tuple({
+    (university["name"].lower(), university["country"].lower()): university
+    for university in _all_universities
+}.values())
+
+EXTRA_SCHOLARSHIPS = (
+    ("Global Korea Scholarship (GKS)", "Government of South Korea", "Typically covers Korean-language study, degree costs, and support; check the current call.", "International degree applicants to South Korea"),
+    ("Chinese Government Scholarship (CSC)", "China Scholarship Council", "Coverage and eligible programmes vary by current call and university.", "International applicants to China"),
+    ("Stipendium Hungaricum", "Government of Hungary / Tempus Public Foundation", "Tuition, stipend and accommodation support depend on the current sending-partner agreement.", "Eligible applicants for study in Hungary"),
+    ("Türkiye Scholarships", "Government of Türkiye", "Support and eligible programmes vary by the annual official call.", "International applicants to Türkiye"),
+    ("Taiwan Scholarship", "Government of Taiwan and partner institutions", "Support varies by programme and current call.", "International applicants to Taiwan"),
+    ("Swedish Institute Scholarships", "Swedish Institute", "Support varies by programme and annual call.", "Eligible master's applicants to Sweden"),
+    ("Holland Scholarship", "Dutch Ministry of Education and participating institutions", "One-time grant and eligibility vary by institution and annual call.", "Eligible non-EEA students in the Netherlands"),
+    ("Eiffel Excellence Scholarship", "Government of France", "Support varies by level and current call.", "Eligible master's and doctoral applicants to France"),
+    ("New Zealand Scholarships", "Government of New Zealand", "Support and eligible countries vary by current call.", "Eligible international applicants to New Zealand"),
+)
+
+_all_scholarships = SCHOLARSHIP_CATALOG + tuple(
+    {"name": name, "funded_by": funded_by, "coverage": coverage, "best_for": best_for}
+    for name, funded_by, coverage, best_for in EXTRA_SCHOLARSHIPS
+)
+SCHOLARSHIP_CATALOG = tuple({
+    scholarship["name"].lower(): scholarship
+    for scholarship in _all_scholarships
+}.values())
+
 
 def university_website(name: str) -> str:
     """Return an official website when known, otherwise an official-site search."""
@@ -495,19 +640,24 @@ def search_worldwide_universities(query: str, country: str) -> tuple[dict[str, s
     search = query.strip()
     if not search and country == "All countries":
         return ()
-    filters = ["types:education"]
+    # OpenAlex no longer supports a ``types`` filter on this endpoint. Filter
+    # by country here and keep only ``education`` records after receiving the
+    # response below.
+    filters: list[str] = []
     if country != "All countries":
         filters.append(f"country_code:{country_code(country)}")
-    params = {"per-page": "50", "filter": ",".join(filters)}
+    params = {"per-page": "50"}
+    if filters:
+        params["filter"] = ",".join(filters)
     if search:
         params["search"] = search
     endpoint = "https://api.openalex.org/institutions?" + urlencode(params)
     try:
         request = Request(endpoint, headers={"User-Agent": "Career-AI-Student-Project/1.0"})
-        with urlopen(request, timeout=12) as response:
+        with urlopen(request, timeout=8) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except (HTTPError, URLError, OSError, json.JSONDecodeError):
-        return ()
+        return built_in_worldwide_university_results(query, country)
     results: list[dict[str, str]] = []
     for item in payload.get("results", []):
         if item.get("type") != "education":
@@ -518,8 +668,59 @@ def search_worldwide_universities(query: str, country: str) -> tuple[dict[str, s
             "country": str(item.get("country_code") or "").upper(),
             "city": str(location.get("city") or ""),
             "website": str(item.get("homepage_url") or ""),
+            "description": "Institution listed in the OpenAlex worldwide higher-education directory.",
+            "source": "OpenAlex directory",
         })
-    return tuple(results)
+    return tuple(results) or built_in_worldwide_university_results(query, country)
+
+
+def built_in_worldwide_university_results(query: str, country: str) -> tuple[dict[str, str], ...]:
+    """Offline searchable directory used whenever the public service is unavailable.
+
+    Streamlit deployments and school networks may block the live OpenAlex
+    request.  This fallback keeps Worldwide search useful for university
+    names, countries and study fields without depending on an internet API.
+    """
+    catalogue_country = {
+        "United States": "USA",
+        "United Kingdom": "UK",
+    }.get(country, country)
+    candidates = [
+        university for university in UNIVERSITY_CATALOG
+        if country == "All countries" or university["country"] == catalogue_country
+    ]
+    search_words = [
+        word for word in re.findall(r"[a-z0-9]+", query.lower())
+        if word not in {"university", "universities", "college", "colleges", "institution", "institutions", "school", "schools"}
+    ]
+    if search_words:
+        matches = [
+            university for university in candidates
+            if all(
+                word in " ".join(str(value).lower() for value in university.values())
+                for word in search_words
+            )
+        ]
+        # A broad subject typed with a university name can fail an exact
+        # all-word match. In that case keep every university matching at least
+        # one meaningful term rather than displaying an empty page.
+        if not matches:
+            matches = [
+                university for university in candidates
+                if any(
+                    word in " ".join(str(value).lower() for value in university.values())
+                    for word in search_words
+                )
+            ]
+        candidates = matches
+    return tuple({
+        "name": university["name"],
+        "country": university["country"],
+        "city": "",
+        "website": university_website(university["name"]),
+        "description": f"Study areas: {university['field']}. {university['reputation']}",
+        "source": "Career AI built-in directory",
+    } for university in candidates[:50])
 
 
 def country_code(country: str) -> str:
@@ -536,19 +737,83 @@ THEMES = {
 
 
 def init_state() -> None:
-    defaults = {"app_stage":"login", "auth_mode":"create", "light_mode":False, "nav_page":"Dashboard", "student_name":"", "student_email":"", "quiz_name":"", "intake_mode":None, "intake_index":0, "intake_answers":{}, "personality_mode":None, "personality_index":0, "personality_answers":{}, "personality_complete":False, "backend_profile":None, "backend_error":"", "top_matches":[], "career_insights":{}, "score_error":"", "local_roadmap_completed":set(), "mentor_history":[]}
+    defaults = {"app_stage":"login", "auth_mode":"login", "light_mode":False, "nav_page":"Dashboard", "student_name":"", "student_email":"", "quiz_name":"", "intake_mode":None, "intake_index":0, "intake_answers":{}, "personality_mode":None, "personality_index":0, "personality_answers":{}, "personality_complete":False, "backend_profile":None, "backend_error":"", "top_matches":[], "career_insights":{}, "score_error":"", "local_roadmap_completed":set(), "mentor_history":[]}
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
 
 
+# These values make a student's recommendations personal. They are saved in
+# SQLite after each important action and restored when that student logs in.
+PERSISTED_PROFILE_KEYS = (
+    "app_stage",
+    "intake_mode", "intake_index", "intake_answers", "personality_mode",
+    "personality_index", "personality_answers", "personality_complete",
+    "top_matches", "career_insights", "score_error", "mentor_history",
+    "nav_page", "local_roadmap_completed",
+)
+
+
+def save_current_student_state() -> None:
+    """Save quiz, results, chat and roadmap progress for the logged-in user."""
+    email = str(st.session_state.get("student_email", "")).strip()
+    if not email:
+        return
+    state: dict[str, object] = {}
+    for key in PERSISTED_PROFILE_KEYS:
+        value = st.session_state.get(key)
+        # JSON cannot store Python sets; roadmap completion is the only one.
+        state[key] = sorted(value) if isinstance(value, set) else value
+    save_student_state(email, state)
+
+
+def restore_student_state(account: dict[str, object]) -> None:
+    """Restore one user's saved quiz state without restoring another user's UI."""
+    st.session_state.student_name = str(account["name"])
+    st.session_state.student_email = str(account["email"])
+    student_id = str(account["student_id"])
+    st.session_state.backend_profile = {
+        "student_id": student_id,
+        "name": st.session_state.student_name,
+        "email": st.session_state.student_email,
+    }
+    saved = load_student_state(st.session_state.student_email)
+    for key in PERSISTED_PROFILE_KEYS:
+        if key in saved:
+            st.session_state[key] = saved[key]
+    st.session_state.local_roadmap_completed = set(
+        st.session_state.get("local_roadmap_completed", [])
+    )
+
+
+def resume_stage() -> str:
+    """Return a safe place for a returning student to continue."""
+    allowed_stages = {
+        "welcome", "intake", "intake_results", "personality",
+        "personality_results", "dashboard",
+    }
+    saved_stage = str(st.session_state.get("app_stage", "dashboard"))
+    return saved_stage if saved_stage in allowed_stages else "dashboard"
+
+
+def admin_email() -> str:
+    """Read the administrator email from Secrets or a local environment value."""
+    try:
+        return str(st.secrets.get("ADMIN_EMAIL", os.getenv("ADMIN_EMAIL", ""))).strip().lower()
+    except FileNotFoundError:
+        return os.getenv("ADMIN_EMAIL", "").strip().lower()
+
+
+def is_admin() -> bool:
+    return bool(admin_email()) and st.session_state.student_email.strip().lower() == admin_email()
+
+
 def log_out() -> None:
-    """Clear the active profile but retain browser-only demo accounts for login."""
-    local_accounts = st.session_state.get("local_demo_accounts", {})
+    """Save the profile then clear this browser's active account."""
+    save_current_student_state()
     for key in list(st.session_state.keys()):
         del st.session_state[key]
-    st.session_state.local_demo_accounts = local_accounts
     st.session_state.app_stage = "login"
-    st.session_state.auth_mode = "create"
+    st.session_state.auth_mode = "login"
     st.session_state.light_mode = False
     st.session_state.nav_page = "Dashboard"
 
@@ -561,15 +826,25 @@ def inject_styles() -> None:
     t = THEMES[theme_name()]
     st.markdown(f"""<style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
-    :root{{--bg:{t['bg']};--text:{t['text']};--muted:{t['muted']};--card:{t['card']};--soft:{t['soft']};--line:{t['line']};--sidebar:{t['sidebar']};--input:{t['input']};--input-text:{t['input_text']};--shadow:{t['shadow']};--score:{t['score']};--mentor:{t['mentor']};--violet:#7c3aed;--pink:#ef5e7d;--mint:#15bfa2}} *{{font-family:'DM Sans',sans-serif}} .stApp{{background:var(--bg);color:var(--text)}} #MainMenu,footer{{visibility:hidden}} header,[data-testid='stHeader']{{background:transparent!important;height:2.8rem!important;pointer-events:none!important}} [data-testid='stHeader'] button{{pointer-events:auto!important}} [data-testid='stToolbar']{{display:none!important}} .block-container{{max-width:1500px;padding-top:2.2rem;padding-bottom:2.5rem}} [data-testid='stSidebar']{{background:var(--sidebar)!important;border-right:1px solid rgba(211,193,255,.24)!important;min-width:270px!important}} section[data-testid='stSidebar'][aria-expanded='false']{{min-width:270px!important;transform:translateX(0)!important;margin-left:0!important}} [data-testid='stSidebar'] *{{color:#f8f5ff!important}} h1,h2,h3{{font-family:'Space Grotesk',sans-serif;color:var(--text)}}
+    :root{{--bg:{t['bg']};--text:{t['text']};--muted:{t['muted']};--card:{t['card']};--soft:{t['soft']};--line:{t['line']};--sidebar:{t['sidebar']};--input:{t['input']};--input-text:{t['input_text']};--shadow:{t['shadow']};--score:{t['score']};--mentor:{t['mentor']};--violet:#7c3aed;--pink:#ef5e7d;--mint:#15bfa2}} *{{font-family:'DM Sans',sans-serif}} .stApp{{background:var(--bg);color:var(--text)}} #MainMenu,footer{{visibility:hidden}} header,[data-testid='stHeader']{{background:transparent!important;height:2.8rem!important}} [data-testid='stToolbar']{{visibility:visible!important;display:flex!important}} [data-testid='stToolbar'] button,[data-testid='stHeader'] button{{visibility:visible!important;display:flex!important;opacity:1!important;color:var(--text)!important;pointer-events:auto!important}} .block-container{{max-width:1500px;padding-top:2.2rem;padding-bottom:2.5rem}} [data-testid='stSidebar']{{background:var(--sidebar)!important;border-right:1px solid rgba(211,193,255,.24)!important}} [data-testid='stSidebar'] *{{color:#f8f5ff!important}} h1,h2,h3{{font-family:'Space Grotesk',sans-serif;color:var(--text)}}
     .brand{{display:flex;align-items:center;gap:10px;margin:3px 0 20px}}.brand-name{{color:#fff;font:700 1.35rem 'Space Grotesk',sans-serif;white-space:nowrap}}.brand-name span{{color:#ff6b81}}.sidebar-tagline{{color:#cfc4eb;font-size:.73rem;white-space:nowrap}}.top-title{{font:700 2.25rem 'Space Grotesk',sans-serif;color:var(--text);letter-spacing:-1.4px;margin:0 0 3px}}.top-subtitle{{color:var(--muted);margin-bottom:18px}}.panel{{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 15px 38px var(--shadow);box-sizing:border-box}}.panel h3{{margin:0 0 8px}}.muted{{color:var(--muted)!important}}.accent{{color:#8b5cf6;font-weight:700}}.mint{{color:var(--mint);font-weight:700}}
-    .choice-card{{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:27px;min-height:250px;text-align:center;box-shadow:0 15px 38px var(--shadow)}}.choice-icon{{font-size:2.6rem;margin-bottom:9px}}.quiz-step{{color:#8b5cf6;font-size:.85rem;font-weight:700;margin-bottom:10px}}.question-card{{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:29px;box-shadow:0 15px 38px var(--shadow)}}.question-number{{color:#8b5cf6;font-weight:700}}.question-text{{font:600 1.6rem 'Space Grotesk',sans-serif;color:var(--text);line-height:1.35;margin:13px 0 21px}}.progress-shell{{height:8px;background:rgba(124,58,237,.16);border-radius:999px;overflow:hidden;margin:11px 0 25px}}.progress-fill{{height:100%;background:linear-gradient(90deg,#7c3aed,#ef5e7d);border-radius:999px}}.result-code{{font:700 3.2rem 'Space Grotesk',sans-serif;color:#8b5cf6;letter-spacing:4px}}.result-number{{font:700 2.7rem 'Space Grotesk',sans-serif;color:var(--text)}}.match-grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}}.match-card{{background:var(--soft);border:1px solid var(--line);border-radius:13px;padding:15px;min-height:160px}}.match-pill{{float:right;color:var(--mint);background:rgba(21,191,162,.13);padding:4px 8px;border-radius:8px;font-size:.74rem;font-weight:700}}.icon-bubble{{width:43px;height:43px;display:grid;place-items:center;border-radius:14px;background:linear-gradient(145deg,rgba(255,71,88,.34),rgba(19,12,31,.9));border:1px solid rgba(255,99,111,.62);box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 14px rgba(255,48,73,.45);font-size:1.35rem}}.butterfly-mark{{color:#ff5066;text-shadow:0 0 8px #ff324c,0 0 18px rgba(255,50,76,.74);font-size:1.35rem}}.score-panel{{background:var(--score);border-radius:18px;padding:23px;color:#fff;min-height:228px}}.score-panel *{{color:#fff}}.big-score{{font:700 3.2rem 'Space Grotesk',sans-serif;margin:22px 0 8px}}.ai-card{{background:var(--mentor);border:1px solid rgba(236,91,122,.38);border-radius:18px;padding:20px;margin-bottom:17px}}.ai-card p{{color:var(--muted)}}
+    .choice-card{{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:27px;min-height:250px;text-align:center;box-shadow:0 15px 38px var(--shadow)}}.choice-icon{{font-size:2.6rem;margin-bottom:9px}}.quiz-step{{color:#8b5cf6;font-size:.85rem;font-weight:700;margin-bottom:10px}}.question-card{{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:29px;box-shadow:0 15px 38px var(--shadow)}}.question-number{{color:#8b5cf6;font-weight:700}}.question-text{{font:600 1.6rem 'Space Grotesk',sans-serif;color:var(--text);line-height:1.35;margin:13px 0 21px}}.progress-shell{{height:8px;background:rgba(124,58,237,.16);border-radius:999px;overflow:hidden;margin:11px 0 25px}}.progress-fill{{height:100%;background:linear-gradient(90deg,#7c3aed,#ef5e7d);border-radius:999px}}.result-code{{font:700 3.2rem 'Space Grotesk',sans-serif;color:#8b5cf6;letter-spacing:4px}}.result-number{{font:700 2.7rem 'Space Grotesk',sans-serif;color:var(--text)}}.match-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:11px}}.match-card{{background:var(--soft);border:1px solid var(--line);border-radius:13px;padding:15px;min-height:160px;min-width:0}}.match-card h3{{font-size:clamp(1.15rem,2vw,1.55rem)!important;line-height:1.2!important;word-break:normal!important;overflow-wrap:normal!important;hyphens:none!important}}.match-card p{{word-break:normal!important;overflow-wrap:normal!important;hyphens:none!important}}.match-pill{{float:right;color:var(--mint);background:rgba(21,191,162,.13);padding:4px 8px;border-radius:8px;font-size:.74rem;font-weight:700}}.icon-bubble{{width:43px;height:43px;display:grid;place-items:center;border-radius:14px;background:linear-gradient(145deg,rgba(255,71,88,.34),rgba(19,12,31,.9));border:1px solid rgba(255,99,111,.62);box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 14px rgba(255,48,73,.45);font-size:1.35rem}}.butterfly-mark{{color:#ff5066;text-shadow:0 0 8px #ff324c,0 0 18px rgba(255,50,76,.74);font-size:1.35rem}}.score-panel{{background:var(--score);border-radius:18px;padding:23px;color:#fff;min-height:228px}}.score-panel *{{color:#fff}}.big-score{{font:700 3.2rem 'Space Grotesk',sans-serif;margin:22px 0 8px}}.ai-card{{background:var(--mentor);border:1px solid rgba(236,91,122,.38);border-radius:18px;padding:20px;margin-bottom:17px}}.ai-card p{{color:var(--muted)}}
     .login-visual{{position:relative;min-height:610px;display:flex;align-items:center;justify-content:center;overflow:hidden}}.login-orbit{{position:absolute;width:470px;height:470px;border:1px dashed rgba(154,105,255,.34);border-radius:50%}}.login-message{{position:relative;z-index:2;max-width:500px;text-align:center;font:700 3.1rem/1.05 'Space Grotesk',sans-serif;color:var(--text);letter-spacing:-2px}}.login-message span{{color:#ef5e7d}}.float-career{{position:absolute;z-index:3;display:grid;place-items:center;width:93px;height:93px;border-radius:27px;border:1px solid var(--line);background:var(--soft);box-shadow:0 13px 32px var(--shadow);font-size:3rem;animation:career-drift 4s ease-in-out infinite}}.career-1{{top:48px;left:15%}}.career-2{{top:48px;right:15%;animation-delay:-1s}}.career-3{{top:235px;left:2%;animation-delay:-2s}}.career-4{{top:235px;right:2%;animation-delay:-.5s}}.career-5{{bottom:46px;left:17%;animation-delay:-2.5s}}.career-6{{bottom:46px;right:17%;animation-delay:-1.5s}}@keyframes career-drift{{50%{{transform:translateY(-12px) rotate(3deg)}}}}
     .st-key-ai_mentor_card{{background:var(--mentor);border:1px solid rgba(236,91,122,.44)!important;border-radius:17px;padding:12px 13px 16px;box-shadow:0 15px 38px var(--shadow);text-align:center}}[data-testid='stImage'] img{{filter:drop-shadow(0 0 7px rgba(163,99,255,.9)) drop-shadow(0 0 18px rgba(236,91,122,.42));animation:logo-glow 2.8s ease-in-out infinite;object-fit:contain!important}}@keyframes logo-glow{{50%{{filter:drop-shadow(0 0 12px rgba(181,114,255,1)) drop-shadow(0 0 30px rgba(255,91,141,.7))}}}}
     div[data-baseweb='input'],div[data-baseweb='input']>div,div[data-baseweb='textarea'],div[data-baseweb='textarea']>div{{background:var(--input)!important;border-color:var(--line)!important}}[data-testid='stTextInput'] input,[data-testid='stTextArea'] textarea,.stTextInput input,.stTextArea textarea,div[data-baseweb='input'] input,div[data-baseweb='textarea'] textarea{{background-color:var(--input)!important;color:var(--input-text)!important;-webkit-text-fill-color:var(--input-text)!important;caret-color:var(--input-text)!important;opacity:1!important;font-weight:600!important}}[data-testid='stTextInput'] input::placeholder,[data-testid='stTextArea'] textarea::placeholder,.stTextInput input::placeholder,.stTextArea textarea::placeholder{{color:var(--input-text)!important;-webkit-text-fill-color:var(--input-text)!important;opacity:.62!important}}.stButton>button,button[kind='primary'],[data-testid='stFormSubmitButton'] button{{background:linear-gradient(90deg,#7c3aed,#ef5e7d)!important;color:#fff!important;border:1px solid rgba(255,255,255,.16);border-radius:12px;font-weight:700;min-height:43px;box-shadow:0 8px 18px rgba(95,45,199,.24);transition:.24s}}.stButton>button *,[data-testid='stFormSubmitButton'] button *{{color:#fff!important;-webkit-text-fill-color:#fff!important;opacity:1!important}}.stButton>button:hover,button[kind='primary']:hover{{transform:translateY(-2px);color:#fff!important;background:linear-gradient(135deg,#8e50ef,#f1678c)!important;border-color:rgba(255,255,255,.68);box-shadow:inset 0 1px rgba(255,255,255,.82),0 12px 28px rgba(110,55,220,.32);backdrop-filter:blur(16px)}}[data-testid='stAlert']{{background:#fff3f4!important;border:2px solid #e23d55!important;border-radius:12px!important}}[data-testid='stAlert'] *,[data-testid='stAlert'] p,[data-testid='stAlert'] div{{color:#5d1020!important;-webkit-text-fill-color:#5d1020!important;opacity:1!important;font-weight:600!important}}[data-testid='stSidebar'] .stRadio label{{padding:7px 5px;border-radius:10px;background:linear-gradient(145deg,rgba(255,255,255,.1),rgba(145,98,255,.08));border:1px solid rgba(255,255,255,.1)}}
-    /* Keep RIASEC option text readable in both themes. */
-    [data-testid='stRadio'] label,[data-testid='stRadio'] label *,[role='radiogroup'] label,[role='radiogroup'] label *{{color:var(--text)!important;-webkit-text-fill-color:var(--text)!important;opacity:1!important;font-weight:600!important;text-shadow:none!important}}[data-testid='stRadio'] [data-baseweb='radio'] span{{color:var(--text)!important;-webkit-text-fill-color:var(--text)!important;opacity:1!important}}[data-testid='stRadio'] label:hover,[role='radiogroup'] label:hover{{background:rgba(124,58,237,.12)!important;border-radius:8px}}
+    /* Force every Streamlit control label and option to use a high-contrast
+       theme colour. Some mobile browsers otherwise keep a faint default text
+       colour after switching between light and dark mode. */
+    [data-testid='stWidgetLabel'] *,[data-testid='stTextInput'] label *,[data-testid='stTextArea'] label *,[data-testid='stSelectbox'] label *,[data-testid='stCheckbox'] label *,[data-testid='stSlider'] label *,[data-testid='stRadio'] label,[data-testid='stRadio'] label *,[role='radiogroup'] label,[role='radiogroup'] label *{{color:var(--text)!important;-webkit-text-fill-color:var(--text)!important;opacity:1!important;font-weight:600!important;text-shadow:none!important}}[data-testid='stRadio'] [data-baseweb='radio'] span{{color:var(--text)!important;-webkit-text-fill-color:var(--text)!important;opacity:1!important}}[data-testid='stRadio'] label:hover,[role='radiogroup'] label:hover{{background:rgba(124,58,237,.12)!important;border-radius:8px}}[data-testid='stSelectbox'] [data-baseweb='select']>div,[data-testid='stSelectbox'] [data-baseweb='select'] input,[data-baseweb='select'] [role='combobox']{{background:var(--input)!important;color:var(--input-text)!important;-webkit-text-fill-color:var(--input-text)!important;opacity:1!important}}[data-baseweb='popover'],[data-baseweb='popover'] *{{color:#15121d!important;-webkit-text-fill-color:#15121d!important;opacity:1!important}}[data-testid='stCheckbox'] [data-baseweb='checkbox']{{background:var(--input)!important;border-color:var(--line)!important}}
+    /* The sidebar uses radio controls too, so override the general form-label
+       colour after all other radio rules. White text stays readable in both
+       application themes against the permanent deep-purple sidebar. */
+    [data-testid='stSidebar'] [data-testid='stRadio'] label,[data-testid='stSidebar'] [data-testid='stRadio'] label *,[data-testid='stSidebar'] [role='radiogroup'] label,[data-testid='stSidebar'] [role='radiogroup'] label *{{color:#fff!important;-webkit-text-fill-color:#fff!important;opacity:1!important;text-shadow:0 1px 2px rgba(0,0,0,.35)!important}}
     .stButton>button:disabled,[data-testid='stFormSubmitButton'] button:disabled{{background:#59536d!important;color:#d8d4e1!important;-webkit-text-fill-color:#d8d4e1!important;border-color:#706987!important;box-shadow:none!important;cursor:not-allowed!important;opacity:.72!important;transform:none!important}}
+    /* Alerts are kept readable but neutral. Validation still appears, while
+       an optional local-backend fallback never looks like an app failure. */
+    [data-testid='stAlert']{{background:var(--card)!important;border:1px solid var(--line)!important;border-radius:12px!important;box-shadow:0 8px 22px var(--shadow)!important}}
+    [data-testid='stAlert'] *,[data-testid='stAlert'] p,[data-testid='stAlert'] div{{color:var(--text)!important;-webkit-text-fill-color:var(--text)!important}}
     @media(max-width:900px){{.block-container{{padding:1rem}}.match-grid{{grid-template-columns:1fr}}.top-title{{font-size:1.9rem}}.question-text{{font-size:1.3rem}}}}
     </style>""", unsafe_allow_html=True)
 
@@ -578,17 +853,75 @@ def reset_quiz(mode: str) -> None:
     st.session_state.intake_mode = mode
     st.session_state.intake_index = 0
     st.session_state.intake_answers = {}
+    # A new career quiz must not reuse old RIASEC ratings or old text-widget
+    # values, otherwise the next results would mix two different attempts.
+    st.session_state.personality_mode = None
+    st.session_state.personality_index = 0
+    st.session_state.personality_answers = {}
+    st.session_state.personality_complete = False
     st.session_state.backend_profile = None
     st.session_state.backend_error = ""
     st.session_state.top_matches = []
     st.session_state.career_insights = {}
     st.session_state.score_error = ""
+    for key in list(st.session_state):
+        # Do not delete intake_mode/intake_index/intake_answers: they are the
+        # new quiz state we have just set above. Only old widget values need
+        # clearing before Streamlit redraws the form.
+        if key.startswith(("widget_intake_", "radio_p_", "slider_p_")):
+            del st.session_state[key]
     st.session_state.app_stage = "intake"
+    save_current_student_state()
+
+
+def begin_quiz_reattempt() -> None:
+    """Clear an old attempt and let the student choose Quick or Complete again."""
+    st.session_state.intake_mode = None
+    st.session_state.intake_index = 0
+    st.session_state.intake_answers = {}
+    st.session_state.personality_mode = None
+    st.session_state.personality_index = 0
+    st.session_state.personality_answers = {}
+    st.session_state.personality_complete = False
+    st.session_state.backend_profile = None
+    st.session_state.backend_error = ""
+    st.session_state.top_matches = []
+    st.session_state.career_insights = {}
+    st.session_state.score_error = ""
+    for key in list(st.session_state):
+        if key.startswith(("widget_intake_", "radio_p_", "slider_p_")):
+            del st.session_state[key]
+    st.session_state.app_stage = "welcome"
+    save_current_student_state()
+
+
+def begin_riasec_reattempt() -> None:
+    """Keep the career quiz, but clear ratings so RIASEC can be taken again."""
+    st.session_state.personality_mode = None
+    st.session_state.personality_index = 0
+    st.session_state.personality_answers = {}
+    st.session_state.personality_complete = False
+    st.session_state.backend_profile = None
+    st.session_state.backend_error = ""
+    st.session_state.top_matches = []
+    st.session_state.career_insights = {}
+    st.session_state.score_error = ""
+    for key in list(st.session_state):
+        if key.startswith(("radio_p_", "slider_p_")):
+            del st.session_state[key]
+    # Return to the existing chooser so the student can select Quick or Full.
+    st.session_state.app_stage = "intake_results"
+    save_current_student_state()
 
 
 def open_ai_mentor() -> None:
     """Safe callback: sidebar widgets cannot be changed after they render."""
     st.session_state.nav_page = "AI Mentor"
+
+
+def open_explore_careers() -> None:
+    """Open the complete career catalogue from the dashboard card."""
+    st.session_state.nav_page = "Explore Careers"
 
 
 def start_personality(mode: str) -> None:
@@ -605,6 +938,7 @@ def start_personality(mode: str) -> None:
         if key.startswith("radio_p_") or key.startswith("slider_p_"):
             del st.session_state[key]
     st.session_state.app_stage = "personality"
+    save_current_student_state()
 
 
 def intake_questions() -> tuple[tuple[str, str], ...]:
@@ -613,6 +947,54 @@ def intake_questions() -> tuple[tuple[str, str], ...]:
 
 def personality_questions() -> tuple[tuple[str, str], ...]:
     return SHORT_RIASEC_QUESTIONS if st.session_state.personality_mode == "riasec_short" else RIASEC_QUESTIONS
+
+
+CAREER_SIGNAL_SECTIONS = {
+    "Interests & passions",
+    "Skills & strengths",
+    "Hobbies & activities",
+    "Career awareness & aspirations",
+}
+
+
+def career_interest_text() -> str:
+    """Use the complete written quiz profile for matching.
+
+    A student's preferred country, work style, school subjects and career
+    goals can all add useful context.  Career keywords are still matched as
+    complete words, so unrelated answers do not become a false career match.
+    """
+    answers = [
+        str(st.session_state.intake_answers.get(f"intake_{index}", "")).strip().lower()
+        for index, _question in enumerate(intake_questions())
+    ]
+    return " ".join(answer for answer in answers if answer)
+
+
+def labelled_quiz_answers() -> list[dict[str, str]]:
+    """Give an AI model the question together with each saved answer."""
+    profile: list[dict[str, str]] = []
+    for index, (section, prompt) in enumerate(intake_questions()):
+        answer = str(st.session_state.intake_answers.get(f"intake_{index}", "")).strip()
+        if answer:
+            profile.append({"section": section, "question": prompt, "answer": answer})
+    return profile
+
+
+def has_positive_career_keyword(text: str, keyword: str) -> bool:
+    """Match a clear interest, but ignore 'I dislike/not interested in X'."""
+    terms = (keyword, *DIRECT_CAREER_ALIASES.get(keyword, ()))
+    for term in terms:
+        pattern = re.compile(rf"(?<!\w){re.escape(term)}(?!\w)")
+        for match in pattern.finditer(text.lower()):
+            before = text[max(0, match.start() - 55):match.start()]
+            negative = re.search(
+                r"\b(?:no|not|never|don't|do not|didn't|did not|dislike|hate|avoid|isn't|is not|aren't|are not)\b[^.!?]{0,45}$",
+                before,
+            )
+            if not negative:
+                return True
+    return False
 
 
 def local_riasec_scores() -> dict[str, int]:
@@ -624,11 +1006,16 @@ def local_riasec_scores() -> dict[str, int]:
 
 def intake_theme_scores() -> dict[str, int]:
     """Return lightweight interest signals from completed open-text answers."""
-    answers = st.session_state.intake_answers.values()
-    combined = " ".join(str(answer).lower() for answer in answers)
+    # Do not let answers about budget, location, or preferred learning style
+    # accidentally become a career interest. For example, selecting
+    # "reading/writing" as a learning style should not force Writer results.
+    combined = career_interest_text()
     scores: dict[str, int] = {code: 0 for code in RIASEC}
     for code, keywords in INTAKE_THEME_KEYWORDS.items():
-        scores[code] = sum(combined.count(keyword) for keyword in keywords)
+        scores[code] = sum(
+            has_positive_career_keyword(combined, keyword)
+            for keyword in keywords
+        )
     return scores
 
 
@@ -641,16 +1028,46 @@ def active_theme_ranking() -> list[str]:
     return sorted(scores, key=scores.get, reverse=True)
 
 
+def profile_confidence_score() -> int:
+    """Estimate how specific the profile is; never return a fixed match value."""
+    interest_text = career_interest_text()
+    if not interest_text.strip():
+        return 0
+
+    meaningful_answers = [
+        answer for answer in interest_text.split("\n")
+        if len(answer.split()) >= 2
+    ]
+    # ``career_interest_text`` joins answers with spaces, so count completed
+    # signal sections separately for a stable, explainable score.
+    completed_sections = sum(
+        bool(str(st.session_state.intake_answers.get(f"intake_{index}", "")).strip())
+        for index, (section, _) in enumerate(intake_questions())
+        if section in CAREER_SIGNAL_SECTIONS
+    )
+    word_count = len(re.findall(r"[a-zA-Z]+", interest_text))
+    direct_interests = sum(
+        has_positive_career_keyword(interest_text, keyword)
+        for keyword in DIRECT_CAREER_KEYWORDS
+    )
+    active_themes = sum(value > 0 for value in intake_theme_scores().values())
+
+    score = (
+        45
+        + min(16, completed_sections * 4)
+        + min(14, word_count // 18)
+        + min(12, direct_interests * 3)
+        + min(8, active_themes * 2)
+    )
+    if st.session_state.personality_complete:
+        # Completing RIASEC adds extra evidence, but does not claim certainty.
+        score += 8
+    return max(55, min(95, score))
+
+
 def dashboard_suitability_score() -> int:
-    """Show a career-fit score, never a static quiz-completion percentage."""
-    matches = displayed_career_matches()
-    if matches:
-        raw_score = matches[0].get("score") or matches[0].get("match_score") or matches[0].get("percentage")
-        try:
-            return max(0, min(100, round(float(str(raw_score).replace("%", "")))))
-        except (TypeError, ValueError):
-            pass
-    return 0
+    """Show a changing profile-confidence score, not a hard-coded career score."""
+    return profile_confidence_score()
 
 
 def riasec_scores() -> dict[str, int]:
@@ -743,8 +1160,13 @@ def auth_post(endpoint: str, payload: dict[str, str]) -> tuple[dict[str, object]
 
 
 def backend_unavailable(error: str) -> bool:
-    """True only for a network failure, never for a rejected password/account."""
-    return error.startswith("Could not reach the authentication backend")
+    """Recognise optional local API failures without hiding real user errors."""
+    message = str(error).lower()
+    local_service = "127.0.0.1:8000" in message or "localhost:8000" in message
+    network_failure = any(phrase in message for phrase in (
+        "could not reach", "connection refused", "connection reset", "timed out",
+    ))
+    return local_service and network_failure
 
 
 def local_demo_account(email: str, name: str = "") -> dict[str, str]:
@@ -765,11 +1187,30 @@ def local_demo_account(email: str, name: str = "") -> dict[str, str]:
 
 def direct_careers_from_text(text: str) -> tuple[str, ...]:
     """Return careers explicitly connected to words in a question or quiz."""
-    found: list[str] = []
+    groups: list[tuple[str, ...]] = []
     for keyword in sorted(DIRECT_CAREER_KEYWORDS, key=len, reverse=True):
-        if re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", text.lower()):
-            found.extend(DIRECT_CAREER_KEYWORDS[keyword])
+        terms = (keyword, *DIRECT_CAREER_ALIASES.get(keyword, ()))
+        if any(re.search(rf"(?<!\w){re.escape(term)}(?!\w)", text.lower()) for term in terms):
+            groups.append(DIRECT_CAREER_KEYWORDS[keyword])
+    found: list[str] = []
+    # Interleave careers from every stated hobby/interest. This makes mixed
+    # answers such as "dance and drawing" visibly represent both interests.
+    for position in range(max((len(group) for group in groups), default=0)):
+        for group in groups:
+            if position < len(group):
+                found.append(group[position])
     return tuple(dict.fromkeys(found))
+
+
+def closest_career_keyword(text: str) -> str:
+    """Recognise small spelling mistakes such as ``docotor`` → ``doctor``."""
+    words = re.findall(r"[a-zA-Z]{3,}", text.lower())
+    keywords = tuple(DIRECT_CAREER_KEYWORDS)
+    for word in words:
+        close = get_close_matches(word, keywords, n=1, cutoff=0.78)
+        if close:
+            return close[0]
+    return ""
 
 
 def job_titles_from_text(text: str) -> tuple[str, ...]:
@@ -791,6 +1232,31 @@ def specific_skills_for_question(text: str) -> tuple[str, ...]:
     return ()
 
 
+def mentor_topic(question: str) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
+    """Identify the role the student asks about, before using profile defaults.
+
+    The direct question must win over earlier quiz answers.  For example, a
+    student interested in cooking can still ask a useful question about coding.
+    """
+    lowered = question.lower()
+    matched_keywords = [
+        keyword for keyword in sorted(DIRECT_CAREER_KEYWORDS, key=len, reverse=True)
+        if re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", lowered)
+    ]
+    careers = direct_careers_from_text(lowered) or job_titles_from_text(lowered)
+    skills = specific_skills_for_question(lowered)
+    if matched_keywords:
+        return matched_keywords[0].title(), careers[:3], skills
+    fuzzy_keyword = closest_career_keyword(lowered)
+    if fuzzy_keyword:
+        fuzzy_careers = DIRECT_CAREER_KEYWORDS[fuzzy_keyword]
+        fuzzy_skills = ROLE_SKILL_GUIDANCE.get(fuzzy_keyword, skills)
+        return fuzzy_keyword.title(), fuzzy_careers[:3], fuzzy_skills
+    if careers:
+        return str(careers[0]), careers[:3], skills
+    return "your selected career direction", career_suggestions()[:3], skills
+
+
 def is_career_mentor_question(question: str) -> bool:
     """Keep the mentor career-focused while allowing natural student wording."""
     text = question.lower()
@@ -800,41 +1266,140 @@ def is_career_mentor_question(question: str) -> bool:
         "profession", "future", "stream", "admission", "salary", "salary", "placement",
         "roadmap", "qualification", "exam", "portfolio", "cv", "application",
     )
+    # Match complete words/phrases only.  A plain ``word in text`` check made
+    # short terms such as "ai" match unrelated words such as "pain".
+    has_guidance_word = any(
+        re.search(rf"(?<!\w){re.escape(word)}(?!\w)", text)
+        for word in guidance_words
+    )
     return bool(
-        any(word in text for word in guidance_words)
+        has_guidance_word
         or direct_careers_from_text(text)
         or job_titles_from_text(text)
+        or closest_career_keyword(text)
+    )
+
+
+def is_friendly_mentor_message(question: str) -> bool:
+    """Allow a small set of natural greetings without opening off-topic chat."""
+    text = re.sub(r"[^a-z ]", " ", question.lower()).strip()
+    greetings = {
+        "hi", "hello", "hey", "good morning", "good afternoon", "good evening",
+        "how are you", "how r you", "thank you", "thanks", "bye", "goodbye",
+    }
+    return text in greetings
+
+
+def friendly_mentor_reply(question: str) -> str:
+    text = question.lower()
+    if "how" in text:
+        return "I’m doing well, thank you! I’m ready to help you explore careers, courses, colleges, universities, scholarships, skills, internships, or study plans."
+    if "thank" in text:
+        return "You’re welcome! What would you like help with—career options, a course, universities, scholarships, skills, or a study plan?"
+    if "bye" in text:
+        return "Goodbye! You can return anytime for career, college, course, scholarship, or skill guidance."
+    return "Hello! I’m Career AI. Tell me a career interest, course, college/university question, scholarship need, or skill goal, and I’ll help you plan your next step."
+
+
+def is_wellbeing_question(question: str) -> bool:
+    """Allow supportive health/wellbeing questions without giving diagnosis."""
+    text = question.lower()
+    wellbeing_words = (
+        "health", "wellbeing", "well-being", "mental health", "stress",
+        "burnout", "anxiety", "sleep", "tired", "overwhelmed", "mood",
+        "focus", "concentration", "self care", "self-care",
+    )
+    return any(word in text for word in wellbeing_words)
+
+
+def wellbeing_reply(question: str) -> str:
+    """Give a short, safe wellbeing response rather than medical diagnosis."""
+    return (
+        "Your health is worth thinking about all the time—not only when it starts "
+        "affecting studies or career plans. Pay attention early if sleep, energy, mood, "
+        "stress, focus, or daily activities are becoming difficult. Talk to a trusted "
+        "adult, doctor, counsellor, or qualified mental-health professional for personal "
+        "advice. If you feel unsafe or think you may be in immediate danger, contact local "
+        "emergency services or a crisis helpline now."
+    )
+
+
+def built_in_general_reply(question: str) -> str:
+    """Useful fallback when a local/online model is unavailable."""
+    if is_wellbeing_question(question):
+        return wellbeing_reply(question)
+    topic, careers, skills = mentor_topic(question)
+    career_text = ", ".join(careers[:3]) or "the paths in your dashboard"
+    skill_text = ", ".join(skills or SKILLS_BY_THEME[active_theme_ranking()[0]][:3])
+    return (
+        f"That is a thoughtful question. Relating it to your current profile, {topic} is a useful "
+        f"starting point. You could explore {career_text} and strengthen {skill_text}. "
+        "For a more detailed answer, try asking what you want to compare, learn, or decide next."
+    )
+
+
+def normalise_mentor_reply(reply: str) -> str:
+    """Make replies comparable without being affected by punctuation or spacing."""
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]", " ", reply.lower())).strip()
+
+
+def mentor_reply_is_repeated(reply: str) -> bool:
+    """Reject an LLM answer that is effectively the same as a recent answer."""
+    candidate = normalise_mentor_reply(reply)
+    if len(candidate) < 35:
+        return False
+    for item in st.session_state.get("mentor_history", [])[-12:]:
+        if chat_message_role(item) != "ai":
+            continue
+        previous = normalise_mentor_reply(chat_message_text(item))
+        if previous and SequenceMatcher(None, candidate, previous).ratio() >= 0.84:
+            return True
+    return False
+
+
+def non_repeating_career_reply(question: str) -> str:
+    """Give a useful backup response when an AI model repeats an old answer."""
+    topic, careers, skills = mentor_topic(question)
+    skills_text = ", ".join(skills or SKILLS_BY_THEME[active_theme_ranking()[0]][:3])
+    career_text = ", ".join(careers[:3]) or "the career paths in your dashboard"
+    return (
+        f"For your new question, “{question.strip()}”, focus on the exact decision in front of you about {topic}: "
+        f"compare the day-to-day work, required qualifications, and entry route for {career_text}. "
+        f"Useful skills to build first are {skills_text}. Tell me the country and education level you are aiming for, "
+        "and I can make the next steps more specific."
     )
 
 
 def built_in_mentor_reply(question: str) -> str:
     """Give question-aware career guidance in the free public app without an LLM/API."""
     text = question.lower()
-    question_careers = direct_careers_from_text(text) or job_titles_from_text(text)
-    careers = question_careers[:3] or career_suggestions()[:3]
+    topic, question_careers, specific_skills = mentor_topic(question)
+    careers = question_careers or career_suggestions()[:3]
     ranked = active_theme_ranking()
     primary = ranked[0]
-    strengths = ", ".join(SKILLS_BY_THEME[primary][:3])
     universities = university_recommendations(text)[:3]
     scholarships = recommended_scholarships(text)[:3]
     focus = ", ".join(careers)
 
     if any(word in text for word in ("scholarship", "financial aid", "funding", "fee", "afford")):
         options = "; ".join(item["name"] for item in scholarships)
-        return f"For {focus}, start by checking: {options}. These are starting points, so always verify eligibility and deadlines on the official provider or university website. Prepare your marksheets, activity list, and income documents early."
+        return f"For {focus}, start by checking: {options}. Compare eligibility, country or state rules, marks, financial-need requirements, deadlines, and documents. Prepare your marksheets, activity list, income documents, and recommendation letters early, then verify everything on the official scholarship website."
     if any(word in text for word in ("university", "universities", "college", "colleges", "campus", "admission", "apply")):
         options = "; ".join(f"{item['name']} ({item['field']})" for item in universities)
-        return f"For {focus}, good places to research first are: {options}. Compare the curriculum, location, entry requirements, total cost, scholarships, and internship opportunities before applying. You can also use the Universities Worldwide page to search the live global directory by country or institution name."
+        return f"For {focus}, good places to research first are: {options}. Compare the course curriculum, location, entry requirements, total cost, scholarships, student support, and internship opportunities before applying. Tell me your preferred country, course, budget, and education level for more focused suggestions. You can also use the Universities Worldwide page to search by country or institution name."
     if any(word in text for word in ("skill", "skills", "learn", "learning", "certification", "certificate", "roadmap")):
-        specific_skills = specific_skills_for_question(text)
         topic_skills = ", ".join(specific_skills or SKILLS_BY_THEME[primary][:3])
-        return f"For {focus}, build these first: {topic_skills}. Choose one beginner course, complete one small project or activity, and save proof of your work. That is more valuable than collecting certificates without practice."
+        return f"For {topic}, focus first on: {topic_skills}. Practise one of these through a small project or real activity, then keep it in a portfolio or evidence folder. After that, choose one beginner course to strengthen the skill you found most difficult."
     if any(word in text for word in ("resume", "cv", "interview", "portfolio", "linkedin")):
         return "Keep your resume to one clear page: education, relevant skills, projects/activities, achievements, and contact details. For interviews, prepare a 30-second introduction and two examples that show a skill, challenge, action, and result. Tailor both to the role you apply for."
     if any(word in text for word in ("course", "degree", "subject", "subjects", "stream", "major", "study")):
-        return f"For {focus}, explore courses connected to those careers. Open each course syllabus and look for modules you genuinely enjoy. A good choice balances interest, your strengths, entry requirements, and the day-to-day work you want."
+        return f"For {topic}, explore courses connected to {focus}. Open each syllabus and look for modules you genuinely enjoy. A good choice balances interest, your strengths, entry requirements, and the day-to-day work you want."
+    if any(word in text for word in ("benefit", "benefits", "advantage", "advantages", "good", "pros", "why become", "why be")) and topic != "your selected career direction":
+        return f"Potential benefits of becoming a {topic.lower()} include meaningful work in that field, the chance to build specialist expertise, varied career paths as you gain experience, and opportunities to make an impact. It also has real demands—training time, workload, competition, and responsibility—so try a small related activity or speak with someone in the field before deciding."
     if any(word in text for word in ("career", "job", "profession", "work", "role", "future", "coding", "design", "acting", "doctor", "engineer", "business", "psychology", "writer", "artist")):
-        return f"Relevant paths for your question are: {focus}. To choose between them, try one small real activity for each—such as a project, club, shadowing opportunity, short course, or conversation with someone in that field—and notice which work you keep wanting to return to."
+        return f"For {topic}, relevant paths include: {focus}. To choose between them, try one small real activity for each—such as a project, club, shadowing opportunity, short course, or conversation with someone in that field—and notice which work you keep wanting to return to."
+    if topic != "your selected career direction":
+        return f"For {topic}, start by exploring what the day-to-day work is really like, which qualifications are needed, the skills employers value, and the work environment you would prefer. The related paths in your catalogue are: {focus}. Try one small project, course, club, or conversation with someone in the field before making a long-term decision."
     return "I’m here for career and education guidance. Ask me about careers, courses, skills, universities, scholarships, resumes, interviews, or a learning roadmap, and I’ll help you plan the next step."
 
 
@@ -853,6 +1418,76 @@ def openai_model() -> str:
         return os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL).strip()
 
 
+def ollama_api_url() -> str:
+    """Read a local Ollama server URL; no paid API key is required."""
+    try:
+        return str(st.secrets.get("OLLAMA_URL", os.getenv("OLLAMA_URL", DEFAULT_OLLAMA_URL))).rstrip("/")
+    except FileNotFoundError:
+        return os.getenv("OLLAMA_URL", DEFAULT_OLLAMA_URL).rstrip("/")
+
+
+def ollama_model() -> str:
+    try:
+        return str(st.secrets.get("OLLAMA_MODEL", os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL))).strip()
+    except FileNotFoundError:
+        return os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL).strip()
+
+
+def ollama_mentor_reply(question: str) -> tuple[str, str]:
+    """Use a local Ollama model for a natural, profile-aware mentor reply."""
+    profile_summary = {
+        "student_name": profile_name(),
+        "quiz_answers": labelled_quiz_answers(),
+        "riasec_themes": [RIASEC[code][0] for code in active_theme_ranking()[:3]],
+        "suggested_careers": list(career_suggestions()[:5]),
+    }
+    instructions = (
+        "You are Career AI, a warm and accurate career mentor for students. "
+        "Your specialty is careers, education, skills, courses, universities, scholarships, "
+        "internships, portfolios, resumes, interviews, and study plans. You may also answer "
+        "ordinary general questions politely and briefly. "
+        "Use the student profile where useful, but never invent marks, rankings, admission "
+        "requirements, scholarship deadlines, fees, or guarantees. Give a concise answer "
+        "with practical next steps, and say to check official sources for current requirements. "
+        "Answer the newest question directly. Do not reuse an earlier answer, even if the "
+        "student has a different career interest from their saved profile."
+    )
+    # Keep the previous conversation first. The question being asked must be
+    # last, otherwise the model can answer an older message repeatedly.
+    history = st.session_state.mentor_history[-6:]
+    messages = [{"role": "system", "content": instructions}]
+    for item in history:
+        role = "user" if chat_message_role(item) == "student" else "assistant"
+        messages.append({"role": role, "content": chat_message_text(item)})
+    messages.append({
+        "role": "user",
+        "content": (
+            f"Student profile:\n{json.dumps(profile_summary, ensure_ascii=False)}\n\n"
+            f"Answer this NEW question directly. Do not repeat an earlier answer: {question}"
+        ),
+    })
+    request = Request(
+        f"{ollama_api_url()}/api/chat",
+        data=json.dumps({"model": ollama_model(), "messages": messages, "stream": False}).encode("utf-8"),
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=90) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        reply = str((data.get("message") or {}).get("content") or "").strip()
+        if not reply:
+            return "", "Ollama did not return a reply."
+        return reply, ""
+    except HTTPError as error:
+        details = error.read().decode("utf-8", errors="replace")
+        return "", f"Ollama could not use model '{ollama_model()}': {details}"
+    except URLError:
+        return "", "Ollama is not running. Start it, then try again."
+    except (OSError, json.JSONDecodeError) as error:
+        return "", f"Ollama could not answer right now: {error}"
+
+
 def gpt_mentor_reply(question: str) -> tuple[str, str]:
     """Generate a safe, profile-aware response using GPT when Secrets are set."""
     api_key = openai_api_key()
@@ -864,7 +1499,7 @@ def gpt_mentor_reply(question: str) -> tuple[str, str]:
     career_matches = ", ".join(career_suggestions()[:5]) or "Not available yet"
     profile_summary = {
         "student_name": profile_name(),
-        "quiz_answers": list(st.session_state.intake_answers.values())[:25],
+        "quiz_answers": labelled_quiz_answers(),
         "riasec_completed": bool(st.session_state.personality_complete),
         "riasec_themes": [RIASEC[code][0] for code in active_theme_ranking()[:3]],
         "suggested_careers": career_matches,
@@ -876,13 +1511,14 @@ def gpt_mentor_reply(question: str) -> tuple[str, str]:
     )
     instructions = (
         "You are Career AI, a warm, accurate career mentor for students. "
-        "Only answer questions about careers, education, skills, courses, colleges/universities, "
+        "Your specialty is careers, education, skills, courses, colleges/universities, "
         "scholarships, internships, portfolios, resumes, interviews, and study plans. "
-        "For unrelated topics, politely say you can only help with career and education guidance. "
+        "You may also answer ordinary general questions politely and briefly. "
         "Use the supplied student profile where useful, but do not invent marks, rankings, scholarship deadlines, "
         "admissions requirements, or facts. Do not guarantee outcomes. Give practical, concise next steps. "
         "For scholarships and university applications, remind the student to verify current eligibility, fees, deadlines, "
-        "and official information."
+        "and official information. Answer the newest question directly and do not reuse an "
+        "earlier response for a different career or topic."
     )
     prompt = (
         f"Student profile:\n{json.dumps(profile_summary, ensure_ascii=False)}\n\n"
@@ -1150,14 +1786,54 @@ def career_suggestions() -> tuple[str, ...]:
     ranked = active_theme_ranking()
     code = "".join(ranked[:2])
     theme_careers = CAREER_MAP.get(code) or CAREER_MAP.get(code[::-1]) or CAREER_MAP[ranked[0]]
-    written_answers = " ".join(str(answer).lower() for answer in st.session_state.intake_answers.values())
-    direct: list[str] = []
-    # Check longest phrases first so "social work" is not lost inside another match.
+    written_answers = career_interest_text()
+    direct_groups: list[tuple[str, ...]] = []
+    # Check longest phrases first so "social work" is not lost inside another
+    # match. Each matched interest becomes a group so recommendations can be
+    # mixed instead of showing three careers from only the first hobby.
     for keyword in sorted(DIRECT_CAREER_KEYWORDS, key=len, reverse=True):
-        if re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", written_answers):
-            direct.extend(DIRECT_CAREER_KEYWORDS[keyword])
-    # Do not show unexplained defaults ahead of explicitly written interests.
+        if has_positive_career_keyword(written_answers, keyword):
+            direct_groups.append(DIRECT_CAREER_KEYWORDS[keyword])
+    direct: list[str] = []
+    for position in range(max((len(group) for group in direct_groups), default=0)):
+        for group in direct_groups:
+            if position < len(group):
+                direct.append(group[position])
+    if st.session_state.personality_complete:
+        # The written quiz says *what* the student is interested in.  RIASEC
+        # adds *how* they prefer to work.  Alternate both signals so finishing
+        # (or re-attempting) RIASEC can genuinely change the top results while
+        # never discarding careers explicitly named in the written quiz.
+        blended: list[str] = []
+        for position in range(max(len(theme_careers), len(direct))):
+            if position < len(theme_careers):
+                blended.append(theme_careers[position])
+            if position < len(direct):
+                blended.append(direct[position])
+        return tuple(dict.fromkeys(blended))
+
+    # Before RIASEC is completed, the student's explicit written interests
+    # remain the clearest signal, followed by related career-theme options.
     return tuple(dict.fromkeys(direct + list(theme_careers)))
+
+
+def career_match_reason(career: str, primary: str, secondary: str, written_answers: str) -> tuple[bool, str]:
+    """Explain each card using its own direct interest or RIASEC connection."""
+    matched_interests = [
+        keyword
+        for keyword, options in DIRECT_CAREER_KEYWORDS.items()
+        if career in options and has_positive_career_keyword(written_answers, keyword)
+    ]
+    if matched_interests:
+        interest = max(matched_interests, key=len)
+        return True, f"{career} turns your interest in {interest} into a possible career path."
+
+    themes = CAREER_THEME_CODES.get(career, ())
+    if primary in themes and secondary in themes:
+        return False, f"{career} suits both your {RIASEC[primary][0]} and {RIASEC[secondary][0]} strengths."
+    if primary in themes:
+        return False, f"{career} connects strongly with your {RIASEC[primary][0]} strengths."
+    return False, f"{career} is a related option worth comparing with your strongest interests."
 
 
 def relevant_career_results() -> tuple[dict[str, object], ...]:
@@ -1169,17 +1845,24 @@ def relevant_career_results() -> tuple[dict[str, object], ...]:
     """
     ranked = active_theme_ranking()
     primary, secondary = ranked[:2]
-    careers = career_suggestions()[:5]
-    written_answers = " ".join(str(answer).lower() for answer in st.session_state.intake_answers.values())
+    careers = career_suggestions()[:6]
+    written_answers = career_interest_text()
+    profile_score = profile_confidence_score()
     results: list[dict[str, object]] = []
     for position, career in enumerate(careers):
         themes = CAREER_THEME_CODES.get(career, (primary,))
-        direct_match = any(career in options and re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", written_answers) for keyword, options in DIRECT_CAREER_KEYWORDS.items())
-        alignment = 97 if direct_match else 94 if primary in themes and secondary in themes else 90 if primary in themes else 78
+        direct_match, reason = career_match_reason(career, primary, secondary, written_answers)
+        alignment = (
+            profile_score
+            if direct_match
+            else profile_score - 3 if primary in themes and secondary in themes
+            else profile_score - 7 if primary in themes
+            else profile_score - 12
+        )
         results.append({
             "career": career,
-            "score": max(60, alignment - position * 3),
-            "reason": "Directly matches an interest you wrote in your quiz." if direct_match else f"Matches your strongest themes: {RIASEC[primary][0]} and {RIASEC[secondary][0]}.",
+            "score": max(55, alignment - position * 3),
+            "reason": reason,
         })
     return tuple(results)
 
@@ -1210,6 +1893,96 @@ def personalized_roadmap_steps() -> tuple[dict[str, object], ...]:
     )
 
 
+def automatic_roadmap_steps() -> tuple[dict[str, object], ...]:
+    """Build an honest roadmap from work the student has actually completed.
+
+    Quiz milestones are never marked by a manual checkbox.  They update from
+    the saved answers, so the same progress is shown after logging in again.
+    """
+    career_total = len(intake_questions()) if st.session_state.intake_mode in {"short", "long"} else 0
+    career_answered = sum(
+        bool(str(st.session_state.intake_answers.get(f"intake_{index}", "")).strip())
+        for index in range(career_total)
+    )
+    career_complete = bool(career_total and career_answered >= career_total)
+
+    riasec_total = len(personality_questions()) if st.session_state.personality_mode else 0
+    riasec_answered = sum(
+        value is not None
+        for value in st.session_state.personality_answers.values()
+    )
+    riasec_complete = bool(
+        st.session_state.personality_complete
+        and riasec_total
+        and riasec_answered >= riasec_total
+    )
+    primary, secondary = active_theme_ranking()[:2]
+    careers = career_suggestions()[:3]
+
+    return (
+        {
+            "id": 1,
+            "title": "Complete your Career Discovery Quiz",
+            "description": f"{career_answered} of {career_total} career-quiz answers saved." if career_total else "Choose a Quick or Complete Career Discovery Quiz to begin.",
+            "completed": career_complete,
+        },
+        {
+            "id": 2,
+            "title": "Build your written career profile",
+            "description": "Your interests, strengths, study preferences, goals, location choices and activities are now used in your recommendations." if career_complete else "This unlocks automatically after the Career Discovery Quiz is complete.",
+            "completed": career_complete,
+        },
+        {
+            "id": 3,
+            "title": "Complete your RIASEC Personality Quiz",
+            "description": f"{riasec_answered} of {riasec_total} RIASEC ratings saved." if riasec_total else "Take a Quick or Full RIASEC Quiz to refine your work-style match.",
+            "completed": riasec_complete,
+        },
+        {
+            "id": 4,
+            "title": "Identify your Holland Code work style",
+            "description": f"Your strongest current work-style themes are {RIASEC[primary][0]} and {RIASEC[secondary][0]}." if riasec_complete else "This is calculated automatically after the RIASEC quiz.",
+            "completed": riasec_complete,
+        },
+        {
+            "id": 5,
+            "title": "Generate personalised career matches",
+            "description": f"Your written answers and RIASEC profile are now combined. Compare: {', '.join(careers)}." if career_complete and riasec_complete else "This unlocks automatically once both quizzes are complete.",
+            "completed": career_complete and riasec_complete,
+        },
+        {
+            "id": 6,
+            "title": "Prepare your skills and course direction",
+            "description": f"Your learning focus is ready: {', '.join(SKILLS_BY_THEME[primary][:3])}." if riasec_complete else "Complete RIASEC to personalise your skill priorities.",
+            "completed": career_complete and riasec_complete,
+        },
+        {
+            "id": 7,
+            "title": "Unlock relevant university and scholarship routes",
+            "description": "Your University and Scholarship pages can now use your career direction, location preferences and interests." if career_complete and riasec_complete else "Complete both quizzes to unlock the most focused recommendations.",
+            "completed": career_complete and riasec_complete,
+        },
+        {
+            "id": 8,
+            "title": "Compare your top career paths",
+            "description": "Read the day-to-day work, entry requirements, courses and opportunities for at least two of your suggested careers.",
+            "completed": False,
+        },
+        {
+            "id": 9,
+            "title": "Start a skill-building project or course",
+            "description": "Choose one small project, club, course, competition or practice activity linked to your preferred path.",
+            "completed": False,
+        },
+        {
+            "id": 10,
+            "title": "Build a portfolio and plan your next application",
+            "description": "Save projects, achievements and certificates, then check official college, scholarship or internship requirements.",
+            "completed": False,
+        },
+    )
+
+
 def university_recommendations(extra_context: str = "") -> tuple[dict[str, str], ...]:
     """Match universities to quiz interests, with optional mentor-question context."""
     ranked = active_theme_ranking()
@@ -1225,12 +1998,26 @@ def university_recommendations(extra_context: str = "") -> tuple[dict[str, str],
         "Conventional": ("Business", "Technology", "Manufacturing", "Transportation", "Retail"),
     }
     written_answers = " ".join(str(answer).lower() for answer in st.session_state.intake_answers.values()) + " " + extra_context.lower()
-    preferred_countries = {
-        "us": "USA", "usa": "USA", "united states": "USA", "uk": "UK", "united kingdom": "UK",
-        "india": "India", "canada": "Canada", "australia": "Australia", "germany": "Germany",
-        "singapore": "Singapore", "japan": "Japan", "france": "France", "switzerland": "Switzerland",
-    }
-    country_choices = tuple(country for phrase, country in preferred_countries.items() if re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", written_answers))
+    sport_terms = ("sport", "sports", "cricket", "football", "athlete", "athletics", "coach", "physical education", "fitness", "yoga")
+    health_sport_terms = ("physiotherapy", "physiotherapist", "sports medicine", "sports doctor")
+    wants_sports = any(re.search(rf"(?<!\w){re.escape(term)}(?!\w)", written_answers) for term in sport_terms)
+    wants_sports_health = any(re.search(rf"(?<!\w){re.escape(term)}(?!\w)", written_answers) for term in health_sport_terms)
+    # Detect any country written by the student, not only a short hard-coded
+    # list. Aliases cover the names most commonly used in applications.
+    catalogue_countries = {university["country"] for university in UNIVERSITY_CATALOG}
+    # Add every country available in the worldwide directory, then normalise
+    # common short forms to the country labels used by our curated catalogue.
+    country_aliases = {country.lower(): country for country in GLOBAL_UNIVERSITY_COUNTRIES}
+    country_aliases.update({country.lower(): country for country in catalogue_countries})
+    country_aliases.update({
+        "us": "USA", "usa": "USA", "united states": "USA",
+        "uk": "UK", "united kingdom": "UK", "uae": "United Arab Emirates",
+        "korea": "South Korea", "south korea": "South Korea",
+    })
+    country_choices = tuple(dict.fromkeys(
+        country for phrase, country in country_aliases.items()
+        if re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", written_answers)
+    ))
     karnataka_terms = ("karnataka", "bengaluru", "bangalore", "mysuru", "mysore", "manipal", "hubballi", "surathkal")
     wants_karnataka = any(re.search(rf"(?<!\w){re.escape(term)}(?!\w)", written_answers) for term in karnataka_terms)
     direct_fields = [
@@ -1247,11 +2034,49 @@ def university_recommendations(extra_context: str = "") -> tuple[dict[str, str],
         # an acting student who writes "US" should get US film/arts options,
         # not an unrelated US business university.
         subject_score = sum(20 if signal in direct_fields else 2 for signal in preferred_fields if signal.lower() in field)
-        country_score = 3 if university["country"] in country_choices else 0
+        # A requested country is a strong requirement, but course relevance
+        # still affects the order within that country.
+        country_score = 100 if university["country"] in country_choices else 0
         local_score = 12 if wants_karnataka and any(term in university["name"].lower() for term in karnataka_terms) else 0
-        return country_score + local_score + subject_score
+        # An explicit sport interest is stronger evidence than a broad RIASEC
+        # Social/Realistic theme. Keep healthcare universities out unless the
+        # student asked for physiotherapy or sports medicine specifically.
+        sport_score = 500 if wants_sports and "sports" in field else 0
+        healthcare_penalty = -250 if wants_sports and not wants_sports_health and "healthcare" in field and "sports" not in field else 0
+        return country_score + local_score + subject_score + sport_score + healthcare_penalty
 
-    ranked_matches = sorted(UNIVERSITY_CATALOG, key=field_score, reverse=True)
+    country_matches = [university for university in UNIVERSITY_CATALOG if university["country"] in country_choices]
+
+    # The bundled list is deliberately curated and cannot contain every
+    # university on earth. When a student explicitly gives a country (Japan,
+    # Brazil, Kenya, etc.), supplement it with that country's institutions
+    # from the public worldwide directory instead of silently showing an
+    # unrelated default country.
+    if country_choices:
+        requested_country = country_choices[0]
+        directory_country = {
+            "USA": "United States",
+            "UK": "United Kingdom",
+        }.get(requested_country, requested_country)
+        directory_rows = search_worldwide_universities("", directory_country)
+        existing_names = {university["name"].lower() for university in country_matches}
+        for row in directory_rows:
+            name = row["name"].strip()
+            if not name or name.lower() in existing_names:
+                continue
+            city = f" · {row['city']}" if row.get("city") else ""
+            country_matches.append({
+                "name": name,
+                "country": requested_country,
+                "field": "Worldwide university directory",
+                "reputation": f"Institution listed for {requested_country}{city}",
+                "scholarships": "Check this university's official scholarships and financial-aid page.",
+            })
+            existing_names.add(name.lower())
+            if len(country_matches) >= 12:
+                break
+    catalogue = country_matches if country_matches else list(UNIVERSITY_CATALOG)
+    ranked_matches = sorted(catalogue, key=field_score, reverse=True)
     return tuple((ranked_matches or list(UNIVERSITY_CATALOG))[:3])
 
 
@@ -1261,13 +2086,30 @@ def recommendation_career_text() -> str:
 
 
 def recommended_scholarships(extra_context: str = "") -> tuple[dict[str, str], ...]:
-    """Rank scholarships against the profile and optional mentor-question context."""
-    ranked = active_theme_ranking()
-    themes = " ".join(RIASEC[code][0].lower() for code in ranked[:2])
-    context = recommendation_career_text() + " " + themes + " " + " ".join(
+    """Recommend funding from explicit study interests before generic awards.
+
+    A scholarship cannot honestly be guaranteed from an interest alone.  The
+    cards therefore prioritise subject-specific university aid and relevant
+    funding *routes*, then show named public programmes only when their stated
+    eligibility matches the student's country or subject.
+    """
+    # Do not use old dashboard career cards as evidence here: they can belong
+    # to an earlier attempt. The current written-interest answers are the
+    # source of truth for a fresh recommendation.
+    interest_context = career_interest_text() + " " + extra_context.lower()
+    location_context = " ".join(
         str(answer).lower() for answer in st.session_state.intake_answers.values()
     ) + " " + extra_context.lower()
-    wants_karnataka = any(re.search(rf"(?<!\w){re.escape(term)}(?!\w)", context) for term in ("karnataka", "bengaluru", "bangalore", "mysuru", "mysore", "manipal", "hubballi", "surathkal"))
+    wants_karnataka = any(re.search(rf"(?<!\w){re.escape(term)}(?!\w)", location_context) for term in ("karnataka", "bengaluru", "bangalore", "mysuru", "mysore", "manipal", "hubballi", "surathkal"))
+    country_aliases = {country.lower(): country for country in GLOBAL_UNIVERSITY_COUNTRIES}
+    country_aliases.update({
+        "us": "USA", "usa": "USA", "united states": "USA", "uk": "UK",
+        "united kingdom": "UK", "uae": "United Arab Emirates", "korea": "South Korea",
+    })
+    wanted_countries = tuple(dict.fromkeys(
+        country for phrase, country in country_aliases.items()
+        if re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", location_context)
+    ))
     scholarship_signals = {
         "stem": ("coding", "software", "data", "ai", "robot", "engineering", "science", "environment"),
         "arts": ("acting", "actor", "theatre", "film", "music", "dance", "fashion", "photography", "animation", "design", "writing"),
@@ -1279,8 +2121,21 @@ def recommended_scholarships(extra_context: str = "") -> tuple[dict[str, str], .
     }
     keywords = tuple(
         label for label, triggers in scholarship_signals.items()
-        if any(re.search(rf"(?<!\w){re.escape(trigger)}(?!\w)", context) for trigger in triggers)
+        if any(has_positive_career_keyword(interest_context, trigger) for trigger in triggers)
     )
+    field_routes = {
+        "stem": ("STEM merit and research funding route", "Technology, engineering and science universities", "Look for department merit awards, research assistantships and government STEM schemes.", "Students pursuing coding, data, engineering, AI, science or environment programmes"),
+        "arts": ("Creative-arts portfolio scholarship route", "Art, design, film, fashion and media universities", "Look for portfolio-based merit scholarships, creative bursaries and programme-specific fee waivers.", "Students pursuing acting, film, design, music, writing, fashion or other creative fields"),
+        "health": ("Healthcare and medical education support route", "Medical, nursing and health-sciences institutions", "Check institutional merit/need aid, government health schemes and programme-specific grants.", "Students pursuing medicine, nursing, psychology, therapy or allied health"),
+        "business": ("Business and entrepreneurship scholarship route", "Business schools and management programmes", "Look for merit awards, leadership scholarships, women-in-business awards and need-based tuition support.", "Students pursuing business, marketing, finance, accounting or entrepreneurship"),
+        "law": ("Law and public-policy scholarship route", "Law schools and public-policy programmes", "Check merit-cum-means support, debate/leadership awards and university financial-aid pages.", "Students pursuing law, policy or politics"),
+        "sports": ("Sports-performance and athletic scholarship route", "Sports universities, clubs and physical-education programmes", "Check sports quotas, athletic scholarships, coaching-academy support and university sports bursaries.", "Students pursuing cricket, football, coaching, athletics, fitness or physical education"),
+        "education": ("Education and social-impact funding route", "Education, teaching and social-science programmes", "Look for teaching fellowships, community-service awards and university need-based aid.", "Students pursuing teaching, education or social work"),
+    }
+    focused_routes = [
+        {"name": field_routes[label][0], "funded_by": field_routes[label][1], "coverage": field_routes[label][2], "best_for": field_routes[label][3]}
+        for label in keywords
+    ]
     university_aid = [
         {
             "name": f"{university['name']} financial aid",
@@ -1290,22 +2145,60 @@ def recommended_scholarships(extra_context: str = "") -> tuple[dict[str, str], .
         }
         for university in university_recommendations(extra_context)
     ]
-    if not keywords and not wants_karnataka:
-        return tuple(university_aid + list(SCHOLARSHIP_CATALOG[:2]))
+    def unique(items: list[dict[str, str]]) -> tuple[dict[str, str], ...]:
+        result: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for item in items:
+            key = item["name"].lower()
+            if key not in seen:
+                result.append(item)
+                seen.add(key)
+        return tuple(result[:5])
     ranked_scholarships = sorted(
         SCHOLARSHIP_CATALOG,
         key=lambda scholarship: (
             (20 if wants_karnataka and "karnataka" in " ".join(scholarship.values()).lower() else 0)
+            + 30 * sum(country.lower() in " ".join(scholarship.values()).lower() for country in wanted_countries)
             + sum(keyword in " ".join(scholarship.values()).lower() for keyword in keywords)
         ),
         reverse=True,
     )
-    # Pair subject-aligned university aid with broader external scholarships.
-    return tuple((university_aid + ranked_scholarships)[:5])
+    # If the student named a country, real country-specific programmes (for
+    # example Japan's MEXT) are shown before broader options. If our curated
+    # data has no named programme for that country, direct them to the matched
+    # country's university financial-aid offices rather than pretending a
+    # scholarship from another country applies.
+    country_specific = [
+        scholarship for scholarship in ranked_scholarships
+        if any(country.lower() in " ".join(scholarship.values()).lower() for country in wanted_countries)
+    ]
+    if wanted_countries:
+        country = wanted_countries[0]
+        country_route = {
+            "name": f"{country} university financial-aid route",
+            "funded_by": "Selected universities in your chosen country",
+            "coverage": "Check tuition grants, merit awards, need-based aid, and the official government study portal.",
+            "best_for": f"Students planning to study in {country}",
+        }
+        # Subject match comes before country-wide generic programmes.
+        return unique(focused_routes + university_aid + country_specific + [country_route] + ranked_scholarships)
+    if focused_routes or wants_karnataka:
+        # A student who chose acting should see creative funding routes, not a
+        # repeated list of generic overseas fellowships.
+        return unique(focused_routes + university_aid + ranked_scholarships)
+    # No subject or location was provided: give only transparent broad routes.
+    return unique(university_aid + list(SCHOLARSHIP_CATALOG[:2]))
 
 
 def university_recommendation_reason() -> str:
     """Explain the exact profile signal used for the university cards."""
+    written_answers = " ".join(str(answer).lower() for answer in st.session_state.intake_answers.values())
+    selected_country = next(
+        (country for country in GLOBAL_UNIVERSITY_COUNTRIES if re.search(rf"(?<!\w){re.escape(country.lower())}(?!\w)", written_answers)),
+        "",
+    )
+    if selected_country:
+        return f"Prioritising universities and funding routes in {selected_country}, then matching them to your interests."
     ranked = active_theme_ranking()
     top_themes = " and ".join(RIASEC[code][0] for code in ranked[:2])
     if st.session_state.personality_complete:
@@ -1330,9 +2223,13 @@ def is_meaningful_answer(answer: str) -> bool:
     cleaned = answer.strip().lower()
     compact = re.sub(r"\s+", "", cleaned)
     letters = re.sub(r"[^a-z]", "", cleaned)
+    not_applicable_answers = {
+        "na", "n/a", "n.a.", "not applicable", "not available",
+        "not sure", "not yet", "prefer not to say", "none",
+    }
     blocked = {
         "asdf", "asdfgh", "qwerty", "qwertyuiop", "test", "testing",
-        "none", "na", "n/a", "idk", "xxx", "abc", "abcd", "random",
+        "idk", "xxx", "abc", "abcd", "random",
         "iuhdjcknn", "jhjhjh", "fghjkl", "hjkl", "zxcv", "zxcvbn",
     }
     keyboard_mash_fragments = ("asdf", "qwer", "zxcv", "hjkl", "lkjh", "iuhd", "jckn", "mnbv", "poiuy")
@@ -1343,6 +2240,9 @@ def is_meaningful_answer(answer: str) -> bool:
     }
     if not cleaned or cleaned in blocked:
         return False
+    # Students can use N/A for questions that genuinely do not apply to them.
+    if cleaned in not_applicable_answers:
+        return True
     # Many profile questions genuinely need concise factual responses.
     if cleaned in valid_short_answers:
         return True
@@ -1359,33 +2259,87 @@ def is_meaningful_answer(answer: str) -> bool:
         return False
     if len(letters) < 2:
         return False
+    # Reject invented strings such as "dhwijekwh". We deliberately only use
+    # this check for an unknown one-word response, so normal sentences, names,
+    # locations and career terms are not unnecessarily blocked.
+    words = re.findall(r"[a-z]+", cleaned)
+    known_single_words = {
+        "acting", "actor", "artist", "athlete", "books", "business", "coding",
+        "cooking", "cricket", "crochet", "dance", "dancer", "design", "drawing",
+        "engineering", "football", "gaming", "medicine", "music", "painting",
+        "photography", "reading", "science", "singing", "sports", "writing",
+        "yes", "no", "maybe", "india", "japan", "usa", "canada", "australia",
+        "germany", "france", "uk", "uae", "bengaluru", "bangalore", "mumbai",
+        "delhi", "chennai", "hyderabad", "pune", "karnataka",
+    }
+    if len(words) == 1 and words[0] not in known_single_words:
+        # A sequence of three or more consonants in an otherwise unknown lone
+        # word is a strong keyboard-mash signal. Known valid terms above stay
+        # accepted even where English spelling naturally has such a cluster.
+        if re.search(r"[bcdfghjklmnpqrstvwxyz]{3,}", words[0]):
+            return False
     return True
 
 
 def intake_answer_error(index: int, answer: str, prompt: str = "") -> str:
     """Return a student-friendly validation message, or an empty string."""
-    if not is_meaningful_answer(answer):
-        return "Please replace the random text with a meaningful answer. Examples accepted: yes/no, US or UK, 85, crochet, or a full sentence."
-    # The first question specifically requests a background summary. Requiring
-    # a number prevents a random word from being recorded as name/age/grade.
+    cleaned = answer.strip().lower()
+    not_applicable_answers = {
+        "na", "n/a", "n.a.", "not applicable", "not available",
+        "not sure", "not yet", "prefer not to say", "none",
+    }
+    is_not_applicable = cleaned in not_applicable_answers
+    prompt_lower = prompt.lower()
+    # Name, age and current grade/year are needed to build a student profile,
+    # so N/A is not sufficient for this one required opening question.
     if index == 0:
         words = re.findall(r"[A-Za-z]{2,}", answer)
-        if not re.search(r"\d{1,2}", answer) or len(words) < 2:
-            return "Please include your age and grade/year in the answer, for example: “Aanya, 16, Grade 11”."
+        if is_not_applicable or not re.search(r"\d{1,2}", answer) or len(words) < 2:
+            return "Please include your name, age, and grade/year, for example: “Aanya, 16, Grade 11”."
+    if not is_meaningful_answer(answer):
+        return "Please replace the random text with a meaningful answer. Examples accepted: yes/no, N/A, US or UK, 85, crochet, or a full sentence."
+    # Marks, percentages, GPA, scores, hours and budgets need a number (or a
+    # legitimate N/A). Letter grades such as A or B+ are also valid for the
+    # individual-subject marks question.
+    numeric_prompt = any(term in prompt_lower for term in (
+        "percentage", "gpa", "cgpa", "scores or targets", "hours per week",
+        "annual budget", "maximum amount",
+    ))
+    marks_prompt = "marks or grades" in prompt_lower
+    has_number = bool(re.search(r"\d+(?:\.\d+)?\s*%?", answer))
+    has_letter_grade = bool(re.search(r"\b[A-F](?:[+-])?\b", answer))
+    if numeric_prompt and not is_not_applicable and not has_number:
+        return "Please enter a number, percentage, GPA/CGPA, or N/A if this does not apply."
+    if marks_prompt and not is_not_applicable and not (has_number or has_letter_grade):
+        return "Please include numeric marks, percentages, letter grades, or N/A if this does not apply."
     # For rating questions, a real score is needed before a recommendation can
     # use the answer. The student may add an explanation after the number.
-    if ("scale of 1–5" in prompt.lower() or "rate your confidence (1–5)" in prompt.lower()) and not re.search(r"(?<!\d)[1-5](?!\d)", answer):
+    if ("scale of 1–5" in prompt_lower or "rate your confidence (1–5)" in prompt_lower) and not is_not_applicable and not re.search(r"(?<!\d)[1-5](?!\d)", answer):
         return "Please include a rating from 1 to 5, then add a short explanation if you wish."
     return ""
 
 
-def render_theme_toggle() -> None:
-    _, col = st.columns([5, 1])
-    with col:
+def render_theme_toggle(show_logout: bool = False) -> None:
+    """Place page controls together at the top-right of full-screen pages."""
+    if show_logout:
+        _, theme_col, logout_col = st.columns([4, 1, 1])
+    else:
+        _, theme_col = st.columns([5, 1])
+    with theme_col:
         label = "🌙 Dark mode" if st.session_state.light_mode else "☀️ Light mode"
         if st.button(label, key="theme_mode_button", use_container_width=True):
+            # ``nav_page`` is a Streamlit widget value. Keep a separate copy
+            # before rerunning so a theme refresh returns to the page the
+            # student was viewing rather than the default Dashboard.
+            st.session_state.theme_return_page = st.session_state.get("nav_page", "Dashboard")
             st.session_state.light_mode = not st.session_state.light_mode
             st.rerun()
+    if show_logout:
+        with logout_col:
+            if st.button("Log out", key="top_right_log_out", use_container_width=True):
+                save_current_student_state()
+                log_out()
+                st.rerun()
 
 
 def render_login() -> None:
@@ -1397,16 +2351,19 @@ def render_login() -> None:
         heading = "Create your account" if creating_account else "Welcome back"
         subtitle = "Start exploring your future." if creating_account else "Log in to continue your career journey."
         st.markdown(f"<div class='panel'><div class='brand'><div class='brand-name'>Career <span>AI</span></div></div><h1 class='top-title'>{heading}</h1><p class='top-subtitle'>{subtitle}</p>", unsafe_allow_html=True)
-        email = st.text_input("Email address", placeholder="you@example.com", key="email_input")
-        display_name = ""
-        if creating_account:
-            display_name = st.text_input("What should we call you?", placeholder="Enter your name", key="name_input")
-        password = st.text_input("Password", placeholder="Enter your password", type="password", key="password_input")
-        if creating_account:
-            st.caption("Create your own password.")
-        st.checkbox("Remember me")
-        submit_label = "Create account  →" if creating_account else "Log in  →"
-        if st.button(submit_label, use_container_width=True):
+        # Forms make the Return/Enter key submit the login or sign-up action.
+        with st.form("login_form", clear_on_submit=False, enter_to_submit=True):
+            email = st.text_input("Email address", placeholder="you@example.com", key="email_input")
+            display_name = ""
+            if creating_account:
+                display_name = st.text_input("What should we call you?", placeholder="Enter your name", key="name_input")
+            password = st.text_input("Password", placeholder="Enter your password", type="password", key="password_input")
+            if creating_account:
+                st.caption("Create your own password.")
+            st.checkbox("Remember me")
+            submit_label = "Create account  →" if creating_account else "Log in  →"
+            submitted = st.form_submit_button(submit_label, use_container_width=True)
+        if submitted:
             clean_email = email.strip()
             if not is_valid_email(clean_email):
                 st.error("Please enter a valid email address, for example you@example.com.")
@@ -1417,38 +2374,28 @@ def render_login() -> None:
             elif creating_account and len(password) < 8:
                 st.error("Your password must contain at least 8 characters.")
             else:
-                endpoint = "register" if creating_account else "login"
-                payload = {"email": clean_email, "password": password}
-                if creating_account:
-                    payload["name"] = display_name.strip().title()
                 with st.spinner("Setting up your account…"):
-                    account, error = auth_post(endpoint, payload)
-                if error and backend_unavailable(error):
-                    # Streamlit Community Cloud cannot call a server on the
-                    # developer's laptop.  Keep the public demo useful even
-                    # before an online API is deployed.
                     if creating_account:
-                        account = local_demo_account(clean_email, display_name)
-                        st.info("Free demo mode: your account works in this browser. Your quiz results stay private to this session.")
+                        account, error = create_user(
+                            display_name.strip(),
+                            clean_email,
+                            password,
+                        )
                     else:
-                        account = local_demo_account(clean_email)
-                        if not account:
-                            st.error("No browser-only demo account was found for this email. Please create an account first.")
-                elif error:
+                        account, error = authenticate_user(
+                            clean_email,
+                            password,
+                        )
+
+                if error:
                     st.error(error)
 
                 if account:
-                    st.session_state.student_name = str(account["name"])
-                    st.session_state.student_email = str(account["email"])
-                    student_id = account.get("student_id")
-                    if student_id:
-                        st.session_state.backend_profile = {
-                            "student_id": str(student_id),
-                            "name": st.session_state.student_name,
-                            "email": st.session_state.student_email,
-                        }
-                    # New accounts take the quiz; login can resume the dashboard.
-                    st.session_state.app_stage = "welcome" if creating_account else "dashboard"
+                    restore_student_state(account)
+                    # New students choose a quiz. Returning students continue
+                    # from the exact page saved before they logged out/closed.
+                    st.session_state.app_stage = "welcome" if creating_account else resume_stage()
+                    save_current_student_state()
                     st.rerun()
         switch_label = "Already have an account? Log in" if creating_account else "New to Career AI? Create an account"
         if st.button(switch_label, use_container_width=True, key="switch_auth_mode"):
@@ -1471,7 +2418,7 @@ def render_login() -> None:
 
 
 def render_welcome() -> None:
-    render_theme_toggle()
+    render_theme_toggle(show_logout=True)
     st.markdown(f"<div class='top-title'>Hello, {escape(profile_name())}! 👋</div><div class='top-subtitle'>Let’s start by learning what matters to you.</div>", unsafe_allow_html=True)
     st.markdown(f"<div class='panel' style='text-align:center;max-width:900px;margin:0 auto 23px'><div class='butterfly-mark' style='font-size:2.3rem'>🦋</div><h2>“{random.choice(QUOTES)}”</h2><p class='muted'>Choose a quiz length. You can pause and return during this browser session.</p></div>", unsafe_allow_html=True)
     short, long = st.columns(2, gap="large")
@@ -1484,9 +2431,24 @@ def render_welcome() -> None:
 
 
 def render_intake() -> None:
-    render_theme_toggle()
+    render_theme_toggle(show_logout=True)
+    # A browser can refresh while a reset callback is in progress, or an older
+    # saved profile may have an incomplete quiz state. Never index the question
+    # list with an empty value; take the student back to the quiz-length page.
+    mode = st.session_state.get("intake_mode")
+    index = st.session_state.get("intake_index")
+    if mode not in {"short", "long"} or not isinstance(index, int):
+        st.session_state.intake_mode = None
+        st.session_state.intake_index = 0
+        st.session_state.app_stage = "welcome"
+        save_current_student_state()
+        st.rerun()
     questions = intake_questions()
-    index = st.session_state.intake_index
+    if not 0 <= index < len(questions):
+        st.session_state.intake_index = 0
+        st.session_state.app_stage = "welcome"
+        save_current_student_state()
+        st.rerun()
     section, prompt = questions[index]
     percent = round((index + 1) * 100 / len(questions))
     st.markdown(f"<div class='top-title'>Career Discovery Quiz</div><div class='top-subtitle'>{'Quick' if st.session_state.intake_mode == 'short' else 'Complete'} version · Answer honestly — there are no right answers.</div><div class='quiz-step'>{section}</div><div class='progress-shell'><div class='progress-fill' style='width:{percent}%'></div></div>", unsafe_allow_html=True)
@@ -1494,24 +2456,37 @@ def render_intake() -> None:
     st.markdown(f"<div class='question-card'><div class='question-number'>QUESTION {index + 1} OF {len(questions)}</div><div class='question-text'>{escape(prompt)}</div>", unsafe_allow_html=True)
     # A form batches typing and clicking into one submission. This removes the
     # old "Press ⌘+Enter to apply" delay before the Next button responds.
-    with st.form(f"intake_form_{index}", clear_on_submit=False):
+    with st.form(f"intake_form_{index}", clear_on_submit=False, enter_to_submit=True):
         quiz_name = st.session_state.student_name
         quiz_email = st.session_state.student_email
         if index == 0:
             quiz_name = st.text_input("What should we call you?", value=st.session_state.student_name, placeholder="Enter your name", key="quiz_display_name")
             quiz_email = st.text_input("Email address", value=st.session_state.student_email, placeholder="you@example.com", key="quiz_email")
-        answer = st.text_area("Your answer", value=st.session_state.intake_answers.get(key, ""), placeholder="Write your answer here…", height=175, key=f"widget_{key}")
-        previous, _, next_col = st.columns([1, 2, 1])
-        with previous:
-            go_previous = index > 0 and st.form_submit_button("← Previous", use_container_width=True)
+        # Single-line input is intentional: pressing Enter submits the form
+        # and advances to the next question. Students can still type a full
+        # sentence or paragraph in this field.
+        answer = st.text_input("Your answer", value=st.session_state.intake_answers.get(key, ""), placeholder="Write your answer here, then press Enter…", key=f"widget_{key}")
+        previous, save_col, next_col = st.columns([1, 2, 1])
+        # Create Next first so Enter uses this primary form action, while it
+        # still appears in the right-hand column visually.
         with next_col:
             next_label = "Finish quiz  →" if index == len(questions) - 1 else "Next question  →"
             go_next = st.form_submit_button(next_label, use_container_width=True)
+        with previous:
+            go_previous = index > 0 and st.form_submit_button("← Previous", use_container_width=True)
+        with save_col:
+            save_and_exit = st.form_submit_button("Save progress & exit", use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
     if go_previous:
         st.session_state.intake_answers[key] = answer.strip()
         st.session_state.intake_index -= 1
+        save_current_student_state()
+        st.rerun()
+    if save_and_exit:
+        st.session_state.intake_answers[key] = answer.strip()
+        save_current_student_state()
+        log_out()
         st.rerun()
     if go_next:
         validation_error = intake_answer_error(index, answer, prompt)
@@ -1532,6 +2507,7 @@ def render_intake() -> None:
             st.session_state.app_stage = "intake_results"
         else:
             st.session_state.intake_index += 1
+        save_current_student_state()
         st.rerun()
 
 
@@ -1556,11 +2532,12 @@ def render_intake_results() -> None:
         st.button("Start full personality quiz  →", use_container_width=True, on_click=start_personality, args=("riasec_long",))
     if st.button("Open my personalised dashboard  →", use_container_width=True):
         st.session_state.app_stage = "dashboard"
+        save_current_student_state()
         st.rerun()
 
 
 def render_personality() -> None:
-    render_theme_toggle()
+    render_theme_toggle(show_logout=True)
     questions = personality_questions()
     index = st.session_state.personality_index
     code, statement = questions[index]
@@ -1569,39 +2546,56 @@ def render_personality() -> None:
     quiz_title = "Quick RIASEC Personality Quiz" if st.session_state.personality_mode == "riasec_short" else "Full RIASEC Personality Quiz"
     st.markdown(f"<div class='top-title'>{quiz_title}</div><div class='top-subtitle'>Rate each statement based on how you actually feel. 1 = strongly disagree · 5 = strongly agree.</div><div class='progress-shell'><div class='progress-fill' style='width:{round((index+1)*100/len(questions))}%'></div></div>", unsafe_allow_html=True)
     st.markdown(f"<div class='question-card'><div class='question-number'>{icon} {name.upper()} · QUESTION {index+1} OF {len(questions)}</div><div class='question-text'>{escape(statement)}</div>", unsafe_allow_html=True)
-    saved_value = st.session_state.personality_answers.get(value_key)
-    value = st.radio("Your rating", (1, 2, 3, 4, 5), index=int(saved_value) - 1 if saved_value else None, horizontal=True, format_func=lambda number: {1:"1 · Strongly disagree",2:"2 · Disagree",3:"3 · Neutral",4:"4 · Agree",5:"5 · Strongly agree"}[number], key=f"radio_{value_key}")
     st.markdown("</div>", unsafe_allow_html=True)
-    previous, _, next_col = st.columns([1, 2, 1])
-    with previous:
-        if index and st.button("← Previous", use_container_width=True, key="personality_previous"):
-            st.session_state.personality_answers[value_key] = value
-            st.session_state.personality_index -= 1
-            st.rerun()
-    with next_col:
+    # A form gives the RIASEC controls the same Enter-to-continue behaviour as
+    # the written quiz and the login screen.
+    with st.form(f"personality_form_{index}", clear_on_submit=False, enter_to_submit=True):
+        saved_value = st.session_state.personality_answers.get(value_key)
+        value = st.radio("Your rating", (1, 2, 3, 4, 5), index=int(saved_value) - 1 if saved_value else None, horizontal=True, format_func=lambda number: {1:"1 · Strongly disagree",2:"2 · Disagree",3:"3 · Neutral",4:"4 · Agree",5:"5 · Strongly agree"}[number], key=f"radio_{value_key}")
+        previous, save_col, next_col = st.columns([1, 2, 1])
         final = index == len(questions) - 1
-        if st.button("See results  →" if final else "Next question  →", use_container_width=True, key="personality_next"):
-            if value is None:
-                st.error("Please select a rating before continuing.")
-                return
+        with next_col:
+            go_next = st.form_submit_button("See results  →" if final else "Next question  →", use_container_width=True)
+        with previous:
+            go_previous = index > 0 and st.form_submit_button("← Previous", use_container_width=True)
+        with save_col:
+            save_and_exit = st.form_submit_button("Save progress & exit", use_container_width=True)
+
+    if go_previous:
+        if value is not None:
             st.session_state.personality_answers[value_key] = value
-            if final:
-                st.session_state.personality_complete = True
-                with st.spinner("Saving your profile and generating recommendations…"):
-                    saved_profile, error = save_profile_to_backend()
-                st.session_state.backend_profile = saved_profile
-                st.session_state.backend_error = error
-                student_id = str((saved_profile or {}).get("student_id", ""))
-                if student_id:
-                    with st.spinner("Finding your strongest career matches…"):
-                        matches, insights, score_error = fetch_scores_and_insights(student_id)
-                    st.session_state.top_matches = matches
-                    st.session_state.career_insights = insights
-                    st.session_state.score_error = score_error
-                st.session_state.app_stage = "personality_results"
-            else:
-                st.session_state.personality_index += 1
-            st.rerun()
+        st.session_state.personality_index -= 1
+        save_current_student_state()
+        st.rerun()
+    if save_and_exit:
+        if value is not None:
+            st.session_state.personality_answers[value_key] = value
+        save_current_student_state()
+        log_out()
+        st.rerun()
+    if go_next:
+        if value is None:
+            st.error("Please select a rating before continuing.")
+            return
+        st.session_state.personality_answers[value_key] = value
+        if final:
+            st.session_state.personality_complete = True
+            with st.spinner("Saving your profile and generating recommendations…"):
+                saved_profile, error = save_profile_to_backend()
+            st.session_state.backend_profile = saved_profile
+            st.session_state.backend_error = error
+            student_id = str((saved_profile or {}).get("student_id", ""))
+            if student_id:
+                with st.spinner("Finding your strongest career matches…"):
+                    matches, insights, score_error = fetch_scores_and_insights(student_id)
+                st.session_state.top_matches = matches
+                st.session_state.career_insights = insights
+                st.session_state.score_error = score_error
+            st.session_state.app_stage = "personality_results"
+        else:
+            st.session_state.personality_index += 1
+        save_current_student_state()
+        st.rerun()
 
 
 def render_personality_results() -> None:
@@ -1610,28 +2604,29 @@ def render_personality_results() -> None:
     ranked = sorted(scores, key=scores.get, reverse=True)
     code = "".join(ranked[:2])
     scored_matches = displayed_career_matches()
-    suggestions = tuple(match_title(match) for match in scored_matches[:3]) or career_suggestions()
+    suggestions = tuple(match_title(match) for match in scored_matches[:4]) or career_suggestions()[:4]
     max_score = 10 if st.session_state.personality_mode == "riasec_short" else 50
     summary_title = "Your Quick RIASEC Career Profile" if st.session_state.personality_mode == "riasec_short" else "Your RIASEC Career Profile"
     st.markdown(f"<div class='top-title'>{summary_title}</div><div class='top-subtitle'>Your strongest themes point to work environments and career families that may feel naturally engaging.</div>", unsafe_allow_html=True)
     saved_profile = st.session_state.backend_profile or {}
-    if saved_profile.get("student_id"):
-        st.success(f"Profile saved successfully · Student ID: {saved_profile['student_id']}")
-    elif st.session_state.backend_error:
+    if not saved_profile.get("student_id") and st.session_state.backend_error and not backend_unavailable(st.session_state.backend_error):
         st.warning(f"Your on-screen summary is ready, but it was not saved to the backend. {st.session_state.backend_error}")
-    if st.session_state.score_error:
+    if st.session_state.score_error and not backend_unavailable(st.session_state.score_error):
         st.warning(f"Your local results are shown below. {st.session_state.score_error}")
     st.markdown(f"<div class='panel' style='text-align:center;max-width:780px;margin:0 auto 22px'><div class='result-code'>{code}</div><h2>{RIASEC[ranked[0]][1]} {RIASEC[ranked[0]][0]} + {RIASEC[ranked[1]][1]} {RIASEC[ranked[1]][0]}</h2><p class='muted'>Your Holland Code is a starting point for exploration, not a final decision.</p></div>", unsafe_allow_html=True)
-    score_cols = st.columns(3)
-    for col, type_code in zip(score_cols, ranked[:3]):
-        with col:
-            name, icon, _ = RIASEC[type_code]
-            st.markdown(f"<div class='panel' style='text-align:center'><div class='icon-bubble' style='margin:auto'>{icon}</div><h3>{name}</h3><div class='result-number'>{scores[type_code]}/{max_score}</div></div>", unsafe_allow_html=True)
+    st.markdown("<h2 style='margin-top:28px'>Your full RIASEC score breakdown</h2>", unsafe_allow_html=True)
+    # RIASEC has six dimensions. Show every one, not only the strongest three.
+    for start in range(0, len(ranked), 3):
+        score_cols = st.columns(3)
+        for col, type_code in zip(score_cols, ranked[start:start + 3]):
+            with col:
+                name, icon, _ = RIASEC[type_code]
+                st.markdown(f"<div class='panel' style='text-align:center'><div class='icon-bubble' style='margin:auto'>{icon}</div><h3>{name}</h3><div class='result-number'>{scores[type_code]}/{max_score}</div></div>", unsafe_allow_html=True)
     st.markdown("<h2 style='margin-top:28px'>Career families to explore</h2>", unsafe_allow_html=True)
     if scored_matches:
         cards = "".join(
             f"<div class='match-card'><span class='match-pill'>{escape(match_score(match))}</span><div class='icon-bubble butterfly-mark'>🦋</div><h3>{escape(match_title(match))}</h3><p class='muted'>{escape(str(match.get('reason') or match.get('description') or 'A strong match based on your profile.'))}</p></div>"
-            for match in scored_matches[:3]
+            for match in scored_matches[:4]
         )
     else:
         cards = "".join(f"<div class='match-card'><div class='icon-bubble butterfly-mark'>🦋</div><h3>{escape(career)}</h3><p class='muted'>Explore courses, skills, and university paths related to this direction.</p></div>" for career in suggestions)
@@ -1643,6 +2638,7 @@ def render_personality_results() -> None:
         st.markdown("<div class='panel'>" + "".join(f"<p>🦋 {escape(str(item))}</p>" for item in insight_items[:4]) + "</div>", unsafe_allow_html=True)
     if st.button("Open my dashboard  →", use_container_width=True):
         st.session_state.app_stage = "dashboard"
+        save_current_student_state()
         st.rerun()
 
 
@@ -1652,7 +2648,8 @@ def render_sidebar() -> str:
         with logo_col: st.image(LOGO_PATH, width=62)
         with name_col: st.markdown("<div style='padding-top:3px'><div class='brand-name'>Career <span>AI</span></div><div class='sidebar-tagline'>Your AI Career Mentor</div></div>", unsafe_allow_html=True)
         st.markdown("---")
-        page = st.radio("Navigation", PAGES, format_func=lambda p: f"{PAGE_ICONS[p]}  {p}", key="nav_page", label_visibility="collapsed")
+        pages = (*PAGES, "Admin") if is_admin() else PAGES
+        page = st.radio("Navigation", pages, format_func=lambda p: f"{PAGE_ICONS[p]}  {p}", key="nav_page", label_visibility="collapsed")
         st.markdown("---")
         if st.button("Log out", use_container_width=True):
             log_out()
@@ -1660,18 +2657,111 @@ def render_sidebar() -> str:
     return page
 
 
+def render_admin() -> None:
+    """Private local-demo account management. Deletion cannot be undone."""
+    st.markdown("<div class='top-title'>Admin · User accounts</div><div class='top-subtitle'>Manage registered accounts and their saved profile data.</div>", unsafe_allow_html=True)
+    st.warning("Deleting an account permanently removes its login and all saved quiz, RIASEC, roadmap, and chat data.")
+    users = list_users()
+    if not users:
+        st.info("No user accounts have been created yet.")
+        return
+    st.caption(f"{len(users)} registered account(s)")
+    current_email = st.session_state.student_email.strip().lower()
+    pending_delete = str(st.session_state.get("admin_delete_target", "")).strip().lower()
+    for user in users:
+        email = user["email"]
+        left, action = st.columns([5, 1])
+        with left:
+            st.markdown(
+                f"<div class='panel'><h3>{escape(user['name'])}</h3>"
+                f"<p class='muted'>{escape(email)}<br>Created: {escape(user['created_at'])}</p></div>",
+                unsafe_allow_html=True,
+            )
+        with action:
+            st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+            if email == current_email:
+                st.button("Current admin", disabled=True, use_container_width=True, key=f"admin_current_{user['student_id']}")
+            elif pending_delete == email:
+                st.markdown("<p class='muted'><b>Delete this account?</b><br>This cannot be undone.</p>", unsafe_allow_html=True)
+                yes_col, no_col = st.columns(2)
+                with yes_col:
+                    if st.button("Yes", use_container_width=True, key=f"admin_confirm_delete_{user['student_id']}"):
+                        delete_user(email)
+                        st.session_state.pop("admin_delete_target", None)
+                        st.success(f"Deleted {email} and its saved data.")
+                        st.rerun()
+                with no_col:
+                    if st.button("No", use_container_width=True, key=f"admin_cancel_delete_{user['student_id']}"):
+                        st.session_state.pop("admin_delete_target", None)
+                        st.rerun()
+            elif st.button("Delete", use_container_width=True, key=f"admin_delete_{user['student_id']}"):
+                st.session_state.admin_delete_target = email
+                st.rerun()
+
+
+def render_change_password() -> None:
+    """Allow the signed-in student to change only their own password."""
+    st.markdown("<div class='top-title'>Change Password</div><div class='top-subtitle'>Choose a new password for your Career AI account.</div>", unsafe_allow_html=True)
+    with st.form("change_password_form"):
+        current_password = st.text_input("Current password", type="password")
+        new_password = st.text_input("New password", type="password", help="Use at least 8 characters.")
+        confirm_password = st.text_input("Confirm new password", type="password")
+        submitted = st.form_submit_button("Update password  →", use_container_width=True)
+
+    if not submitted:
+        return
+    if not current_password or not new_password or not confirm_password:
+        st.error("Please complete all three password fields.")
+    elif len(new_password) < 8:
+        st.error("Your new password must contain at least 8 characters.")
+    elif new_password != confirm_password:
+        st.error("The new password and confirmation do not match.")
+    else:
+        updated, error = update_user_password(st.session_state.student_email, current_password, new_password)
+        if error:
+            st.error(error)
+        elif updated:
+            st.success("Password updated successfully. You can use it the next time you log in.")
+
+
 def render_dashboard() -> None:
     st.markdown(f"<div class='top-title'>Hello, {escape(profile_name())} 👋</div><div class='top-subtitle'>Here is your growing career profile.</div>", unsafe_allow_html=True)
-    if st.session_state.backend_profile and st.session_state.backend_profile.get("student_id"):
-        st.caption(f"Profile connected · ID: {st.session_state.backend_profile['student_id']}")
+    career_quiz_finished = (
+        st.session_state.intake_mode in {"short", "long"}
+        and len(st.session_state.intake_answers) >= len(intake_questions())
+    )
+    riasec_finished = bool(st.session_state.personality_complete and st.session_state.personality_answers)
+    quiz_col, riasec_col, _ = st.columns([1.35, 1.35, 3])
+    with quiz_col:
+        st.button(
+            "↻ Re-attempt career quiz",
+            key="dashboard_reattempt_quiz",
+            use_container_width=True,
+            on_click=begin_quiz_reattempt,
+            disabled=not career_quiz_finished,
+        )
+    with riasec_col:
+        st.button(
+            "↻ Re-attempt RIASEC",
+            key="dashboard_reattempt_riasec",
+            use_container_width=True,
+            on_click=begin_riasec_reattempt,
+            disabled=not riasec_finished,
+        )
+    if not career_quiz_finished:
+        st.caption("Finish the Career Quiz first to unlock its re-attempt option.")
+    elif not riasec_finished:
+        st.caption("Finish a Quick or Full RIASEC Quiz first to unlock its re-attempt option.")
+    else:
+        st.caption("Career quiz replaces your written interests. RIASEC re-attempt keeps those interests and lets you choose Quick or Full again.")
     live_careers, _ = load_careers_from_backend(careers_api_url())
     scored_matches = displayed_career_matches()
     # Before RIASEC scoring, prioritise the student's discovery answers over
     # the backend's generic catalogue order. Once scored, backend matches win.
     local_suggestions = career_suggestions()
-    generic_backend_suggestions = tuple(career_title(career) for career in live_careers[:3])
+    generic_backend_suggestions = tuple(career_title(career) for career in live_careers[:4])
     suggested = (
-        tuple(match_title(match) for match in scored_matches[:3])
+        tuple(match_title(match) for match in scored_matches[:4])
         or (local_suggestions if not st.session_state.personality_complete else generic_backend_suggestions)
         or generic_backend_suggestions
         or local_suggestions
@@ -1682,11 +2772,21 @@ def render_dashboard() -> None:
     score_detail = "Calculated from your written quiz interests. Complete RIASEC to refine it further." if not st.session_state.personality_complete else "Based on your RIASEC profile and quiz interests."
     with score: st.markdown(f"<div class='score-panel'><h3>Career Suitability Score</h3><div class='big-score'>{suitability_score}%</div><b>{score_message}</b><p>{score_detail}</p></div>", unsafe_allow_html=True)
     with matches:
+        header_left, header_right = st.columns([3, 1])
+        with header_left:
+            st.markdown("<h3 style='margin:0'>Top Career Matches</h3>", unsafe_allow_html=True)
+        with header_right:
+            st.button(
+                "View all →",
+                key="dashboard_view_all_careers",
+                use_container_width=True,
+                on_click=open_explore_careers,
+            )
         match_cards = "".join(
             f"<div class='match-card'><span class='match-pill'>{escape(match_score(match))}</span><div class='icon-bubble butterfly-mark'>🦋</div><h3>{escape(match_title(match))}</h3><p class='muted'>{escape(str(match.get('reason') or 'A promising direction based on your profile.'))}</p></div>"
-            for match in scored_matches[:3]
-        ) if scored_matches else "".join(f"<div class='match-card'><span class='match-pill'>Profile signal</span><div class='icon-bubble butterfly-mark'>🦋</div><h3>{escape(career)}</h3><p class='muted'>Suggested from the interests in your written quiz answers.</p></div>" for career in suggested)
-        st.markdown("<div class='panel'><span class='accent' style='float:right'>View all →</span><h3>Top Career Matches</h3><div class='match-grid'>" + match_cards + "</div></div>", unsafe_allow_html=True)
+            for match in scored_matches[:4]
+        ) if scored_matches else "".join(f"<div class='match-card'><span class='match-pill'>Profile signal</span><div class='icon-bubble butterfly-mark'>🦋</div><h3>{escape(career)}</h3><p class='muted'>Suggested from the interests in your written quiz answers.</p></div>" for career in suggested[:4])
+        st.markdown("<div class='panel'><div class='match-grid'>" + match_cards + "</div></div>", unsafe_allow_html=True)
     with mentor:
         with st.container(border=True, key="ai_mentor_card"):
             st.markdown("### AI Mentor")
@@ -1739,24 +2839,63 @@ def render_dashboard() -> None:
 def render_ai_mentor() -> None:
     st.markdown("<div class='top-title'>AI Mentor</div><div class='top-subtitle'>Career and education guidance only.</div><div class='ai-card'><h3>Ask a career-focused question</h3><p>I can help with careers, skills, courses, universities, scholarships, and internships. For unrelated topics, I’ll politely guide you back.</p></div>", unsafe_allow_html=True)
     using_gpt = bool(openai_api_key() and OpenAI is not None)
-    st.caption("GPT is using your quiz profile to personalise career guidance." if using_gpt else "Your question and your quiz answers are used to provide the guidance below. This conversation stays in your current browser session.")
+    st.caption("GPT is using your quiz profile to personalise career guidance." if using_gpt else f"Ollama model active: {ollama_model()}. If Ollama cannot answer, Career AI uses built-in guidance.")
+    if st.button("Clear conversation", key="mentor_clear_history"):
+        st.session_state.mentor_history = []
+        save_current_student_state()
+        st.rerun()
     with st.form("mentor_form", clear_on_submit=True):
         question = st.text_input("Ask your question", placeholder="Which skills should I build for UX design?")
         asked = st.form_submit_button("Ask AI Mentor  →", use_container_width=True)
-    if asked and question.strip():
-        if not is_career_mentor_question(question):
-            reply = "I’m here to help with career and education guidance. Please ask me about careers, courses, skills, universities, scholarships, internships, or study plans."
+    if asked:
+        if not question.strip():
+            st.error("Please type a career or education question before submitting.")
+        elif is_friendly_mentor_message(question):
+            reply = friendly_mentor_reply(question)
+        elif not is_career_mentor_question(question):
+            # General questions can use the configured AI model as well. The
+            # built-in response remains intentionally cautious when no model
+            # is reachable, because it cannot safely invent broad facts.
+            reply, gpt_error = gpt_mentor_reply(question.strip())
+            if not reply:
+                reply, ollama_error = ollama_mentor_reply(question.strip())
+            else:
+                ollama_error = ""
+            if not reply:
+                reply = built_in_general_reply(question.strip())
+                st.caption("Using the built-in response while the optional AI model is unavailable.")
         else:
             reply, gpt_error = gpt_mentor_reply(question.strip())
             if not reply:
+                reply, ollama_error = ollama_mentor_reply(question.strip())
+            else:
+                ollama_error = ""
+            if not reply:
                 reply = built_in_mentor_reply(question.strip())
-                st.warning(f"{gpt_error} Career AI has shown its built-in career guidance for this message.")
-        st.session_state.mentor_history.append({"role": "student", "message": question.strip()})
-        st.session_state.mentor_history.append({"role": "ai", "message": reply})
-        st.rerun()
-    for message in st.session_state.mentor_history:
-        role = "You" if chat_message_role(message) == "student" else "Career AI"
-        st.markdown(f"<div class='panel'><b>{role}:</b> {escape(chat_message_text(message))}</div>", unsafe_allow_html=True)
+                if gpt_error == "No OpenAI key is configured.":
+                    st.caption("Using the built-in career guidance while the optional AI model is unavailable.")
+                else:
+                    st.caption("Using the built-in career guidance while the optional AI model is unavailable.")
+        if question.strip():
+            if mentor_reply_is_repeated(reply):
+                reply = non_repeating_career_reply(question.strip())
+                if mentor_reply_is_repeated(reply):
+                    reply += " This is a fresh follow-up plan rather than a repeat of your earlier answer."
+            st.session_state.mentor_history.append({"role": "student", "message": question.strip()})
+            st.session_state.mentor_history.append({"role": "ai", "message": reply})
+            save_current_student_state()
+            st.rerun()
+    # Keep each question/reply together, but show the most recent exchange
+    # first so students do not need to scroll down for the latest guidance.
+    history = st.session_state.mentor_history
+    exchanges = [history[position:position + 2] for position in range(0, len(history), 2)]
+    for exchange in reversed(exchanges):
+        for message in exchange:
+            role = "You" if chat_message_role(message) == "student" else "Career AI"
+            st.markdown(
+                f"<div class='panel'><b>{role}:</b> {escape(chat_message_text(message))}</div>",
+                unsafe_allow_html=True,
+            )
 
 
 def render_explore_careers() -> None:
@@ -1774,13 +2913,60 @@ def render_explore_careers() -> None:
     selected_categories = JOB_CATALOG.items() if category == "All categories" else ((category, JOB_CATALOG[category]),)
     all_jobs_with_category = [(job, group) for group, jobs in selected_categories for job in jobs]
     query = search_term.strip().lower()
-    filtered = [(job, group) for job, group in all_jobs_with_category if not query or query in job.lower()]
+
+    # Students naturally search by an interest ("crochet", "cricket",
+    # "plants") while the catalogue stores professional job titles ("Textile
+    # Designer", "Sports Coach", "Horticulturist"). Expand those interest
+    # words into the relevant careers before filtering.
+    related_terms: list[str] = [query] if query else []
+    for keyword, careers_for_interest in DIRECT_CAREER_KEYWORDS.items():
+        if query and re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", query):
+            related_terms.extend(career.lower() for career in careers_for_interest)
+    related_terms.extend({
+        "crochet": ("textile", "weaver", "fashion", "craft", "garment", "pattern"),
+        "cricket": ("sports", "athlete", "coach", "fitness", "physio", "journalist"),
+        "plants": ("botan", "horticultur", "agricultur", "garden", "farm", "environment"),
+        "cooking": ("chef", "cook", "food", "restaurant", "baker", "hospitality"),
+        "acting": ("actor", "theatre", "film", "perform", "voice", "media"),
+    }.get(query, ()))
+    related_terms = list(dict.fromkeys(term for term in related_terms if term))
+    def related_job_match(job: str) -> bool:
+        title = job.lower()
+        for term in related_terms:
+            # Only scientific stems need a partial-word match (botanist,
+            # horticulturist, physiotherapist). All other terms use word
+            # boundaries, preventing accidental matches such as craft →
+            # aircraft or sport → transport.
+            if term in {"botan", "horticultur", "agricultur", "physio"}:
+                if term in title:
+                    return True
+            elif re.search(rf"(?<!\w){re.escape(term)}(?!\w)", title):
+                return True
+        return False
+
+    filtered = [(job, group) for job, group in all_jobs_with_category if not query or related_job_match(job)]
+    if query and len(related_terms) > 1:
+        st.caption("Related career search: " + " · ".join(title.title() for title in related_terms[1:7]))
     st.caption(f"{len(filtered)} career paths found")
     if not filtered:
         st.info("No careers match that search. Try a broader word or choose All categories.")
         return
+    # Rendering all ~1,000 cards at once makes phones and slower laptops lag.
+    # Give students access to every result, 30 at a time, with search narrowing
+    # it further when they know the career they want to explore.
+    page_size = 30
+    total_pages = max(1, (len(filtered) + page_size - 1) // page_size)
+    page_number = st.selectbox(
+        "Career results page",
+        tuple(range(1, total_pages + 1)),
+        key=f"career_page_{category}_{query}",
+        format_func=lambda number: f"Page {number} of {total_pages}",
+    )
+    page_start = (page_number - 1) * page_size
+    visible_jobs = filtered[page_start:page_start + page_size]
+    st.caption(f"Showing careers {page_start + 1}–{page_start + len(visible_jobs)} of {len(filtered)}")
     cards = []
-    for job, group in filtered:
+    for job, group in visible_jobs:
         backend_job = backend_by_name.get(job, {})
         description = career_description(backend_job) if backend_job else f"{group} · Explore required skills, courses, and opportunities."
         cards.append(
@@ -1791,27 +2977,18 @@ def render_explore_careers() -> None:
 
 
 def render_skill_roadmap() -> None:
-    st.markdown("<div class='top-title'>Your Learning Roadmap</div><div class='top-subtitle'>Track each career-preparation step as you complete it.</div>", unsafe_allow_html=True)
-    student_id = active_student_id()
-    steps: list[dict[str, object]] = []
-    error = ""
-    if student_id:
-        steps, error = load_roadmap(student_id, roadmap_api_url())
-    if error:
-        st.warning(f"{error} Showing a roadmap based on your quiz results.")
-    if not steps:
-        steps = list(personalized_roadmap_steps())
-        if not student_id:
-            st.info("Finish the quiz to save this personalized roadmap to your account.")
-    using_local_steps = not student_id or bool(error) or not load_roadmap(student_id, roadmap_api_url())[0]
-    if using_local_steps:
-        for step in steps:
-            step_id = roadmap_step_id(step)
-            if step_id is not None:
-                step["completed"] = step_id in st.session_state.local_roadmap_completed
+    st.markdown("<div class='top-title'>Your Learning Roadmap</div><div class='top-subtitle'>Your quiz progress updates this roadmap automatically.</div>", unsafe_allow_html=True)
+    steps = list(automatic_roadmap_steps())
+    # Quiz/profile milestones are automatic. These final actions need real
+    # student work, so they keep a saved manual completion control.
+    manual_step_ids = {8, 9, 10}
+    for step in steps:
+        step_id = roadmap_step_id(step)
+        if step_id in manual_step_ids:
+            step["completed"] = step_id in st.session_state.local_roadmap_completed
     completed_count = sum(bool(step.get("completed", False)) for step in steps)
     progress = round(completed_count * 100 / len(steps))
-    st.markdown(f"<div class='panel'><h3>{progress}% complete</h3><div class='progress-shell'><div class='progress-fill' style='width:{progress}%'></div></div><p class='muted'>{completed_count} of {len(steps)} steps completed</p></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='panel'><h3>{progress}% complete</h3><div class='progress-shell'><div class='progress-fill' style='width:{progress}%'></div></div><p class='muted'>{completed_count} of {len(steps)} steps completed. Quiz milestones update automatically; real-world actions can be marked when you finish them.</p></div>", unsafe_allow_html=True)
     for position, step in enumerate(steps, 1):
         step_id = roadmap_step_id(step)
         title = roadmap_step_title(step, position)
@@ -1819,26 +2996,24 @@ def render_skill_roadmap() -> None:
         completed = bool(step.get("completed", False))
         row, check = st.columns([5, 1])
         with row:
-            state = "Completed" if completed else "In progress"
+            state = "Completed automatically" if completed and step_id not in manual_step_ids else ("Completed" if completed else "Next step")
             st.markdown(f"<div class='panel'><h3>{position}. {escape(title)}</h3><p class='muted'>{escape(description) if description else state}</p></div>", unsafe_allow_html=True)
         with check:
             st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
-            if step_id is None:
-                st.caption("Missing step ID")
-            elif using_local_steps:
-                if st.button("✓ Done" if not completed else "↩ Undo", key=f"roadmap_step_{step_id}", use_container_width=True):
+            if step_id in manual_step_ids:
+                if st.button("↩ Undo" if completed else "✓ Done", key=f"roadmap_manual_{step_id}", use_container_width=True):
                     if completed:
                         st.session_state.local_roadmap_completed.discard(step_id)
                     else:
                         st.session_state.local_roadmap_completed.add(step_id)
+                    save_current_student_state()
                     st.rerun()
-            elif st.button("✓ Done" if not completed else "↩ Undo", key=f"roadmap_step_{step_id}", use_container_width=True):
-                update_error = update_roadmap_step(student_id, step_id, not completed)
-                if update_error:
-                    st.error(update_error)
-                else:
-                    load_roadmap.clear()
-                    st.rerun()
+            else:
+                st.markdown(
+                    "<div class='match-pill' style='text-align:center'>✓ Auto</div>" if completed
+                    else "<div class='match-pill' style='text-align:center'>Quiz needed</div>",
+                    unsafe_allow_html=True,
+                )
 
 
 def render_universities() -> None:
@@ -1862,17 +3037,19 @@ def render_universities() -> None:
         with st.spinner("Searching worldwide institutions…"):
             global_results = search_worldwide_universities(global_query, country)
         if not global_results:
-            st.warning("No directory results were returned. Check your internet connection or try a broader search.")
+            st.info("No matching institution was found in the available directory. Try a university name, a broader study field, or another country.")
             return
-        st.caption(f"{len(global_results)} institutions found. Use each university’s official website to verify courses, fees, accreditation, admissions, and scholarships.")
+        source_name = str(global_results[0].get("source") or "worldwide directory")
+        st.caption(f"{len(global_results)} institutions found · Source: {source_name}. Use each university’s official website to verify courses, fees, accreditation, admissions, and scholarships.")
         for row_start in range(0, len(global_results), 3):
             row = global_results[row_start:row_start + 3]
             columns = st.columns(3)
             for column, item in zip(columns, row):
                 with column:
+                    detail = str(item.get("description") or item.get("city") or "See the official university website for courses, admissions and scholarships.")
                     st.markdown(
                         f"<div class='match-card'><span class='match-pill'>{escape(item['country'])}</span><div class='icon-bubble'>🎓</div>"
-                        f"<h3>{escape(item['name'])}</h3><p class='muted'>{escape(item['city']) or 'Location not listed'}</p></div>",
+                        f"<h3>{escape(item['name'])}</h3><p class='muted'>{escape(detail)}</p></div>",
                         unsafe_allow_html=True,
                     )
                     st.link_button(
@@ -1893,14 +3070,18 @@ def render_universities() -> None:
                 st.link_button("Open university website ↗", university_website(university["name"]), use_container_width=True)
     st.markdown("<h2 style='margin-top:28px'>Browse all curated universities</h2>", unsafe_allow_html=True)
     fields = tuple(sorted({university["field"] for university in UNIVERSITY_CATALOG}))
-    search_col, field_col = st.columns([2, 1])
+    countries = tuple(sorted({university["country"] for university in UNIVERSITY_CATALOG}))
+    search_col, field_col, country_col = st.columns([2, 1, 1])
     with search_col:
         query = st.text_input("Search universities", placeholder="Try MIT, IIT, design, medicine…").strip().lower()
     with field_col:
         field = st.selectbox("Study field", ("All fields", *fields))
+    with country_col:
+        selected_country = st.selectbox("Country", ("All countries", *countries), key="curated_university_country")
     filtered = [
         university for university in UNIVERSITY_CATALOG
         if (field == "All fields" or university["field"] == field)
+        and (selected_country == "All countries" or university["country"] == selected_country)
         and (not query or query in " ".join(university.values()).lower())
     ]
     st.caption(f"{len(filtered)} university recommendations found · Rankings are snapshots—check current rankings before applying.")
@@ -1953,6 +3134,11 @@ def render_simple_page(page: str) -> None:
 
 def render_app() -> None:
     render_theme_toggle()
+    saved_page = st.session_state.pop("theme_return_page", "")
+    if saved_page in PAGES or (saved_page == "Admin" and is_admin()):
+        # This runs before the sidebar radio widget is created, so Streamlit
+        # can safely restore its selected item on the theme-change rerun.
+        st.session_state.nav_page = saved_page
     page = render_sidebar()
     if page == "Dashboard": render_dashboard()
     elif page == "Explore Careers": render_explore_careers()
@@ -1960,6 +3146,8 @@ def render_app() -> None:
     elif page == "Universities": render_universities()
     elif page == "Scholarships": render_scholarships()
     elif page == "AI Mentor": render_ai_mentor()
+    elif page == "Change Password": render_change_password()
+    elif page == "Admin": render_admin()
     else: render_simple_page(page)
 
 
