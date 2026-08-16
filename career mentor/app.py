@@ -8,11 +8,15 @@ from __future__ import annotations
 
 from difflib import SequenceMatcher, get_close_matches
 from html import escape
+import base64
+import hashlib
+import hmac
 import json
 import os
 import random
 import re
 import sys
+import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -30,6 +34,7 @@ from database import (
     authenticate_user,
     create_user,
     delete_user,
+    get_user_by_student_id,
     initialise_database,
     list_users,
     load_student_state,
@@ -749,6 +754,60 @@ def init_state() -> None:
         st.session_state.setdefault(key, value)
 
 
+def session_secret() -> bytes:
+    """Return the app-only signing secret for the optional remember token."""
+    try:
+        configured = str(st.secrets.get("SESSION_SECRET", "")).strip()
+    except Exception:
+        configured = ""
+    configured = configured or os.getenv("SESSION_SECRET", "").strip()
+    # A stable local fallback keeps localhost convenient. Cloud deployments
+    # should set SESSION_SECRET in Streamlit Secrets for a private key.
+    configured = configured or "career-ai-local-session-secret-change-in-cloud"
+    return configured.encode("utf-8")
+
+
+def make_session_token(student_id: str) -> str:
+    """Create a short-lived, tamper-evident token without storing a password."""
+    payload = {"sid": str(student_id), "exp": int(time.time()) + 60 * 60 * 24 * 30}
+    encoded = base64.urlsafe_b64encode(
+        json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    ).decode("ascii").rstrip("=")
+    signature = hmac.new(session_secret(), encoded.encode("ascii"), hashlib.sha256).digest()
+    signed = base64.urlsafe_b64encode(signature).decode("ascii").rstrip("=")
+    return f"{encoded}.{signed}"
+
+
+def restore_session_from_url() -> None:
+    """Restore a remembered login after a refresh/browser back navigation."""
+    if st.session_state.get("student_email"):
+        return
+    try:
+        token = str(st.query_params.get("session", "")).strip()
+    except Exception:
+        token = ""
+    if not token or "." not in token:
+        return
+    encoded, supplied_signature = token.split(".", 1)
+    expected_signature = base64.urlsafe_b64encode(
+        hmac.new(session_secret(), encoded.encode("ascii"), hashlib.sha256).digest()
+    ).decode("ascii").rstrip("=")
+    if not hmac.compare_digest(supplied_signature, expected_signature):
+        return
+    try:
+        padded = encoded + "=" * (-len(encoded) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+        if int(payload.get("exp", 0)) < int(time.time()):
+            return
+        account = get_user_by_student_id(str(payload.get("sid", "")))
+    except Exception:
+        return
+    if not account:
+        return
+    restore_student_state(account)
+    st.session_state.app_stage = resume_stage()
+
+
 # These values make a student's recommendations personal. They are saved in
 # SQLite after each important action and restored when that student logs in.
 PERSISTED_PROFILE_KEYS = (
@@ -823,6 +882,10 @@ def log_out() -> None:
     st.session_state.auth_mode = "login"
     st.session_state.light_mode = False
     st.session_state.nav_page = "Dashboard"
+    try:
+        st.query_params.pop("session", None)
+    except Exception:
+        pass
 
 
 def theme_name() -> str:
@@ -2590,7 +2653,7 @@ def render_login() -> None:
             password = st.text_input("Password", placeholder="Enter your password", type="password", key="password_input")
             if creating_account:
                 st.caption("Create your own password.")
-            st.checkbox("Remember me")
+            remember_me = st.checkbox("Remember me", key="remember_me_input")
             submit_label = "Create account  →" if creating_account else "Log in  →"
             submitted = st.form_submit_button(submit_label, use_container_width=True)
         if submitted:
@@ -2625,6 +2688,16 @@ def render_login() -> None:
                     # New students choose a quiz. Returning students continue
                     # from the exact page saved before they logged out/closed.
                     st.session_state.app_stage = "welcome" if creating_account else resume_stage()
+                    if remember_me:
+                        try:
+                            st.query_params["session"] = make_session_token(account["student_id"])
+                        except Exception:
+                            pass
+                    else:
+                        try:
+                            st.query_params.pop("session", None)
+                        except Exception:
+                            pass
                     save_current_student_state()
                     st.rerun()
         switch_label = "Already have an account? Log in" if creating_account else "New to Career AI? Create an account"
@@ -3406,6 +3479,7 @@ def render_app() -> None:
 
 def main() -> None:
     init_state()
+    restore_session_from_url()
     inject_styles()
     stage = st.session_state.app_stage
     if stage == "login": render_login()

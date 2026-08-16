@@ -269,6 +269,46 @@ def authenticate_user(email: str, password: str):
     }, ""
 
 
+def get_user_by_student_id(student_id: str):
+    """Load the small public account record used by a signed remember token.
+
+    This deliberately never returns password fields. It is only used after a
+    signed session token has been verified by the Streamlit app.
+    """
+    clean_id = str(student_id).strip()
+    if not clean_id:
+        return None
+
+    if using_supabase():
+        encoded_id = quote(clean_id, safe="")
+        users, error = _supabase_request(
+            "GET",
+            "career_ai_users?student_id=eq."
+            f"{encoded_id}&select=student_id,name,email&limit=1",
+        )
+        if error or not users:
+            return None
+        user = users[0]
+        return {
+            "student_id": user["student_id"],
+            "name": user["name"],
+            "email": user["email"],
+        }
+
+    with get_connection() as connection:
+        user = connection.execute(
+            "SELECT student_id, name, email FROM users WHERE student_id = ?",
+            (clean_id,),
+        ).fetchone()
+    if not user:
+        return None
+    return {
+        "student_id": user["student_id"],
+        "name": user["name"],
+        "email": user["email"],
+    }
+
+
 def update_user_password(email: str, current_password: str, new_password: str):
     """Safely replace a signed-in user's password after verifying the old one."""
     clean_email = email.strip().lower()
