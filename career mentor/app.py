@@ -309,7 +309,7 @@ SKILLS_BY_THEME = {
 INTAKE_THEME_KEYWORDS = {
     "R": ("build", "repair", "machine", "engine", "robot", "mechanical", "workshop", "hardware", "sport", "field work", "outdoor", "tool"),
     "I": ("data", "science", "research", "analysis", "problem solving", "coding", "programming", "math", "technology", "experiment", "physics"),
-    "A": ("acting", "actor", "actress", "theatre", "theater", "perform", "performance", "drama", "stage", "audition", "art", "design", "draw", "creative", "writing", "music", "film", "content", "photography", "story", "visual"),
+    "A": ("acting", "actor", "actress", "theatre", "theater", "perform", "performance", "drama", "stage", "audition", "art", "design", "draw", "creative", "writing", "music", "instrument", "guitar", "piano", "violin", "drums", "singing", "film", "content", "photography", "story", "visual"),
     "S": ("help", "teach", "people", "care", "counsel", "health", "community", "team", "psychology", "education", "volunteer"),
     "E": ("business", "lead", "leadership", "management", "entrepreneur", "marketing", "sales", "law", "finance", "public speaking", "company"),
     "C": ("organise", "organize", "plan", "detail", "account", "spreadsheet", "system", "structure", "admin", "logistics", "records"),
@@ -320,7 +320,7 @@ INTAKE_THEME_KEYWORDS = {
 # The complete job directory remains available in Explore Careers.
 DIRECT_CAREER_KEYWORDS = {
     "acting": ("Actor", "Theatre Artist", "Film Maker"), "actor": ("Actor", "Theatre Artist"), "theatre": ("Theatre Artist", "Actor"), "drama": ("Actor", "Theatre Artist"),
-    "film": ("Film Maker", "Video Editor", "Screenwriter"), "music": ("Musician", "Music Producer", "Sound Engineer"), "dance": ("Dancer", "Choreographer", "Dance Teacher"),
+    "film": ("Film Maker", "Video Editor", "Screenwriter"), "music": ("Musician", "Music Producer", "Sound Engineer"), "instrument": ("Musician", "Instrumentalist", "Music Teacher"), "dance": ("Dancer", "Choreographer", "Dance Teacher"),
     "fashion": ("Fashion Designer", "Fashion Stylist", "Textile Designer"), "photography": ("Photographer", "Photojournalist", "Visual Artist"),
     "crochet": ("Textile Designer", "Weaver", "Fashion Designer"), "knitting": ("Textile Designer", "Weaver", "Fashion Designer"), "sewing": ("Fashion Designer", "Textile Designer", "Garment Worker"),
     "embroidery": ("Textile Designer", "Fashion Designer", "Weaver"), "weaving": ("Weaver", "Textile Designer", "Fashion Designer"), "craft": ("Craft Artist", "Product Designer", "Textile Designer"), "crafts": ("Craft Artist", "Product Designer", "Textile Designer"),
@@ -384,7 +384,8 @@ DIRECT_CAREER_ALIASES = {
     "dance": ("dancing", "dancer", "choreography", "choreograph", "ballet", "hip hop", "hip-hop"),
     "drawing": ("drawings", "sketch", "sketching", "illustration", "illustrating", "digital art"),
     "painting": ("paintings", "painter"),
-    "music": ("singing", "singer", "song", "songs", "songwriting", "songwriter"),
+    "music": ("singing", "singer", "song", "songs", "songwriting", "songwriter", "vocal", "vocals"),
+    "instrument": ("instruments", "instrumental", "guitar", "guitarist", "piano", "pianist", "keyboard", "violin", "violinist", "drum", "drums", "drummer", "flute", "flutist", "tabla", "sitar", "ukulele", "bass", "saxophone", "trumpet"),
     "acting": ("actress", "performing", "performance", "performer", "audition"),
     "photography": ("photographer", "photos", "photo editing"),
     "cooking": ("culinary", "cuisine", "cooked"),
@@ -950,9 +951,15 @@ def personality_questions() -> tuple[tuple[str, str], ...]:
 
 
 CAREER_SIGNAL_SECTIONS = {
+    # These are the answers that describe *what* the student wants to do.
+    # Other sections (country, fees and learning format) still matter, but
+    # guide university/scholarship matching rather than changing a career to
+    # "Writer" just because a student chose a reading/writing learning style.
+    "Academic performance",
     "Interests & passions",
     "Skills & strengths",
     "Hobbies & activities",
+    "Drive, motivation & work values",
     "Career awareness & aspirations",
 }
 
@@ -967,6 +974,23 @@ def career_interest_text() -> str:
     answers = [
         str(st.session_state.intake_answers.get(f"intake_{index}", "")).strip().lower()
         for index, _question in enumerate(intake_questions())
+    ]
+    return " ".join(answer for answer in answers if answer)
+
+
+def career_preference_text() -> str:
+    """Return the career-relevant part of the written profile.
+
+    The full quiz is retained for profile, university and scholarship
+    recommendations.  This focused text prevents practical preferences such
+    as country, budget, or learning format from masquerading as a career
+    interest, while using every answer that communicates interests, skills,
+    activities, academics, motivations or career aspirations.
+    """
+    answers = [
+        str(st.session_state.intake_answers.get(f"intake_{index}", "")).strip().lower()
+        for index, (section, _question) in enumerate(intake_questions())
+        if section in CAREER_SIGNAL_SECTIONS
     ]
     return " ".join(answer for answer in answers if answer)
 
@@ -1031,6 +1055,7 @@ def active_theme_ranking() -> list[str]:
 def profile_confidence_score() -> int:
     """Estimate how specific the profile is; never return a fixed match value."""
     interest_text = career_interest_text()
+    preference_text = career_preference_text()
     if not interest_text.strip():
         return 0
 
@@ -1047,7 +1072,7 @@ def profile_confidence_score() -> int:
     )
     word_count = len(re.findall(r"[a-zA-Z]+", interest_text))
     direct_interests = sum(
-        has_positive_career_keyword(interest_text, keyword)
+        has_positive_career_keyword(preference_text, keyword)
         for keyword in DIRECT_CAREER_KEYWORDS
     )
     active_themes = sum(value > 0 for value in intake_theme_scores().values())
@@ -1221,6 +1246,40 @@ def job_titles_from_text(text: str) -> tuple[str, ...]:
         if len(title) >= 4 and re.search(rf"(?<!\w){re.escape(title.lower())}(?!\w)", lowered)
     ]
     return tuple(matches[:3])
+
+
+def catalogue_careers_from_profile(text: str) -> tuple[str, ...]:
+    """Find explicitly named roles in the complete 900+ career catalogue.
+
+    This is deliberately conservative: a result is added only when the
+    student's wording contains a whole career title or a distinctive part of
+    it.  It gives uncommon roles in the supplied catalogue a route into the
+    recommendations without guessing from unrelated profile answers.
+    """
+    lowered = text.lower()
+    found: list[str] = list(job_titles_from_text(lowered))
+    # A student may write "I want to be a geologist" while the catalogue entry
+    # has extra wording. Match distinctive one-word titles as well, but avoid
+    # generic words that appear in ordinary quiz sentences.
+    ignored_words = {
+        "career", "manager", "assistant", "specialist", "professional",
+        "worker", "officer", "consultant", "technician", "engineer",
+        "designer", "analyst", "teacher", "artist", "director", "scientist",
+        "developer", "coordinator", "administrator", "executive", "operator",
+    }
+    answer_words = set(re.findall(r"[a-z][a-z-]{3,}", lowered))
+    for title in ALL_JOBS:
+        title_words = [word for word in re.findall(r"[a-z][a-z-]{3,}", title.lower()) if word not in ignored_words]
+        if not title_words:
+            continue
+        # A rare role word, for example "geologist" or "cartographer", is a
+        # strong enough signal on its own. Multi-word role names can also
+        # match when all their distinctive words appear in the answer.
+        if (len(title_words) == 1 and title_words[0] in answer_words) or (
+            len(title_words) > 1 and all(word in answer_words for word in title_words)
+        ):
+            found.append(title)
+    return tuple(dict.fromkeys(found))
 
 
 def specific_skills_for_question(text: str) -> tuple[str, ...]:
@@ -1786,7 +1845,10 @@ def career_suggestions() -> tuple[str, ...]:
     ranked = active_theme_ranking()
     code = "".join(ranked[:2])
     theme_careers = CAREER_MAP.get(code) or CAREER_MAP.get(code[::-1]) or CAREER_MAP[ranked[0]]
-    written_answers = career_interest_text()
+    # Use the answers that genuinely describe the student's direction for
+    # direct matching.  The full quiz is still used for theme, university and
+    # scholarship recommendations elsewhere in the app.
+    written_answers = career_preference_text()
     direct_groups: list[tuple[str, ...]] = []
     # Check longest phrases first so "social work" is not lost inside another
     # match. Each matched interest becomes a group so recommendations can be
@@ -1799,22 +1861,27 @@ def career_suggestions() -> tuple[str, ...]:
         for group in direct_groups:
             if position < len(group):
                 direct.append(group[position])
+
+    # Support any explicitly named profession in the complete job catalogue,
+    # not only the curated everyday-interest keywords above. This keeps a
+    # role a student types (for example, geologist or cartographer) ahead of
+    # broad RIASEC fallback careers.
+    catalogue_matches = list(catalogue_careers_from_profile(written_answers))
+    direct = list(dict.fromkeys(direct + catalogue_matches))
+
+    # An explicit interest, hobby, skill or career goal is stronger evidence
+    # than a broad personality theme. Keep at least the student's first four
+    # direct options together so "playing instruments" shows music careers,
+    # not a Robotics Engineer inserted between them.
+    if direct:
+        return tuple(dict.fromkeys(direct + list(theme_careers)))
+
     if st.session_state.personality_complete:
-        # The written quiz says *what* the student is interested in.  RIASEC
-        # adds *how* they prefer to work.  Alternate both signals so finishing
-        # (or re-attempting) RIASEC can genuinely change the top results while
-        # never discarding careers explicitly named in the written quiz.
-        blended: list[str] = []
-        for position in range(max(len(theme_careers), len(direct))):
-            if position < len(theme_careers):
-                blended.append(theme_careers[position])
-            if position < len(direct):
-                blended.append(direct[position])
-        return tuple(dict.fromkeys(blended))
+        return tuple(theme_careers)
 
     # Before RIASEC is completed, the student's explicit written interests
     # remain the clearest signal, followed by related career-theme options.
-    return tuple(dict.fromkeys(direct + list(theme_careers)))
+    return tuple(theme_careers)
 
 
 def career_match_reason(career: str, primary: str, secondary: str, written_answers: str) -> tuple[bool, str]:
@@ -1846,7 +1913,7 @@ def relevant_career_results() -> tuple[dict[str, object], ...]:
     ranked = active_theme_ranking()
     primary, secondary = ranked[:2]
     careers = career_suggestions()[:6]
-    written_answers = career_interest_text()
+    written_answers = career_preference_text()
     profile_score = profile_confidence_score()
     results: list[dict[str, object]] = []
     for position, career in enumerate(careers):
@@ -2466,16 +2533,17 @@ def render_intake() -> None:
         # and advances to the next question. Students can still type a full
         # sentence or paragraph in this field.
         answer = st.text_input("Your answer", value=st.session_state.intake_answers.get(key, ""), placeholder="Write your answer here, then press Enter…", key=f"widget_{key}")
-        previous, save_col, next_col = st.columns([1, 2, 1])
+        previous, next_col = st.columns([1, 1])
         # Create Next first so Enter uses this primary form action, while it
-        # still appears in the right-hand column visually.
+        # still appears in the right-hand column visually. The page already
+        # has a Save/Log out control at the top, so there is only one primary
+        # form action for Enter to trigger.
         with next_col:
             next_label = "Finish quiz  →" if index == len(questions) - 1 else "Next question  →"
-            go_next = st.form_submit_button(next_label, use_container_width=True)
+            go_next = st.form_submit_button(next_label, type="primary", use_container_width=True)
         with previous:
             go_previous = index > 0 and st.form_submit_button("← Previous", use_container_width=True)
-        with save_col:
-            save_and_exit = st.form_submit_button("Save progress & exit", use_container_width=True)
+        save_and_exit = False
     st.markdown("</div>", unsafe_allow_html=True)
 
     if go_previous:
@@ -2552,14 +2620,13 @@ def render_personality() -> None:
     with st.form(f"personality_form_{index}", clear_on_submit=False, enter_to_submit=True):
         saved_value = st.session_state.personality_answers.get(value_key)
         value = st.radio("Your rating", (1, 2, 3, 4, 5), index=int(saved_value) - 1 if saved_value else None, horizontal=True, format_func=lambda number: {1:"1 · Strongly disagree",2:"2 · Disagree",3:"3 · Neutral",4:"4 · Agree",5:"5 · Strongly agree"}[number], key=f"radio_{value_key}")
-        previous, save_col, next_col = st.columns([1, 2, 1])
+        previous, next_col = st.columns([1, 1])
         final = index == len(questions) - 1
         with next_col:
-            go_next = st.form_submit_button("See results  →" if final else "Next question  →", use_container_width=True)
+            go_next = st.form_submit_button("See results  →" if final else "Next question  →", type="primary", use_container_width=True)
         with previous:
             go_previous = index > 0 and st.form_submit_button("← Previous", use_container_width=True)
-        with save_col:
-            save_and_exit = st.form_submit_button("Save progress & exit", use_container_width=True)
+        save_and_exit = False
 
     if go_previous:
         if value is not None:
@@ -2920,7 +2987,8 @@ def render_explore_careers() -> None:
     # words into the relevant careers before filtering.
     related_terms: list[str] = [query] if query else []
     for keyword, careers_for_interest in DIRECT_CAREER_KEYWORDS.items():
-        if query and re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", query):
+        terms = (keyword, *DIRECT_CAREER_ALIASES.get(keyword, ()))
+        if query and any(re.search(rf"(?<!\w){re.escape(term)}(?!\w)", query) for term in terms):
             related_terms.extend(career.lower() for career in careers_for_interest)
     related_terms.extend({
         "crochet": ("textile", "weaver", "fashion", "craft", "garment", "pattern"),
