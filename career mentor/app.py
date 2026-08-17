@@ -2128,11 +2128,26 @@ def career_match_reason(career: str, primary: str, secondary: str, written_answe
         return True, f"{career} turns your interest in {interest} into a possible career path."
 
     themes = CAREER_THEME_CODES.get(career, ())
+    theme_explanations = {
+        "Realistic": "practical, hands-on problem solving",
+        "Investigative": "analysis, research, and understanding how things work",
+        "Artistic": "creative expression and original ideas",
+        "Social": "helping, teaching, and working closely with people",
+        "Enterprising": "leading, persuading, and turning ideas into action",
+        "Conventional": "organising information, accuracy, and structured work",
+    }
     if primary in themes and secondary in themes:
-        return False, f"{career} suits both your {RIASEC[primary][0]} and {RIASEC[secondary][0]} strengths."
+        return False, (
+            f"{career} suits you because your quiz shows interest in "
+            f"{theme_explanations[RIASEC[primary][0]]} and "
+            f"{theme_explanations[RIASEC[secondary][0]]}. This career uses both every day."
+        )
     if primary in themes:
-        return False, f"{career} connects strongly with your {RIASEC[primary][0]} strengths."
-    return False, f"{career} is a related option worth comparing with your strongest interests."
+        return False, (
+            f"{career} suits you because your strongest quiz theme is "
+            f"{RIASEC[primary][0]}: {theme_explanations[RIASEC[primary][0]]}."
+        )
+    return False, f"{career} is related to the themes and interests shown in your quiz answers."
 
 
 def relevant_career_results() -> tuple[dict[str, object], ...]:
@@ -2913,7 +2928,9 @@ def render_personality_results() -> None:
     scores = riasec_scores()
     ranked = sorted(scores, key=scores.get, reverse=True)
     code = "".join(ranked[:2])
-    scored_matches = displayed_career_matches()
+    # Never show a generic/default career before the student has completed the
+    # written quiz. The dashboard should ask them to attempt it instead.
+    scored_matches = displayed_career_matches() if career_quiz_finished else tuple()
     suggestions = tuple(match_title(match) for match in scored_matches[:4]) or career_suggestions()[:4]
     max_score = 10 if st.session_state.personality_mode == "riasec_short" else 50
     summary_title = "Your Quick RIASEC Career Profile" if st.session_state.personality_mode == "riasec_short" else "Your RIASEC Career Profile"
@@ -3087,7 +3104,8 @@ def render_dashboard() -> None:
     else:
         score_message = "Your profile has a strong direction!"
         score_detail = "Based on your RIASEC profile and all of your career-quiz answers."
-    with score: st.markdown(f"<div class='score-panel'><h3>Career Suitability Score</h3><div class='big-score'>{suitability_score}%</div><b>{score_message}</b><p>{score_detail}</p></div>", unsafe_allow_html=True)
+    score_value = f"{suitability_score}%" if career_quiz_finished else "—"
+    with score: st.markdown(f"<div class='score-panel'><h3>Career Suitability Score</h3><div class='big-score'>{score_value}</div><b>{score_message}</b><p>{score_detail}</p></div>", unsafe_allow_html=True)
     with matches:
         header_left, header_right = st.columns([3, 1])
         with header_left:
@@ -3104,7 +3122,7 @@ def render_dashboard() -> None:
         match_cards = "".join(
             f"<div class='match-card'><span class='match-pill'>{escape(match_score(match))}</span><div class='icon-bubble butterfly-mark'>🦋</div><h3>{escape(match_title(match))}</h3><p class='muted'>{escape(str(match.get('reason') or 'A promising direction based on your profile.'))}</p></div>"
             for match in scored_matches[:4]
-        ) if scored_matches else "".join(f"<div class='match-card'><span class='match-pill'>Profile signal</span><div class='icon-bubble butterfly-mark'>🦋</div><h3>{escape(career)}</h3><p class='muted'>Suggested from the interests in your written quiz answers.</p></div>" for career in suggested[:4])
+        ) if scored_matches else "<div class='panel'><h3>Complete your Career Quiz</h3><p class='muted'>Your personalised career matches will appear here after you answer the quiz questions.</p></div>"
         st.markdown("<div class='panel'><div class='match-grid'>" + match_cards + "</div></div>", unsafe_allow_html=True)
     with mentor:
         with st.container(border=True, key="ai_mentor_card"):
