@@ -1006,6 +1006,13 @@ def open_career_quiz() -> None:
     save_current_student_state()
 
 
+def open_dashboard_without_quiz() -> None:
+    """Let a new account inspect the empty dashboard before taking a quiz."""
+    st.session_state.app_stage = "dashboard"
+    st.session_state.nav_page = "Dashboard"
+    save_current_student_state()
+
+
 def open_riasec_quiz() -> None:
     """Open the RIASEC choices after the written career quiz is complete."""
     st.session_state.app_stage = "intake_results"
@@ -2775,6 +2782,13 @@ def render_welcome() -> None:
     with long:
         st.markdown("<div class='choice-card'><div class='choice-icon'>🧭</div><h2>Complete Career Quiz</h2><p class='muted'>The full question bank covering academics, interests, skills, preferences, finances, and support needs.</p><p class='accent'>About 30–40 minutes</p></div>", unsafe_allow_html=True)
         st.button("Start complete quiz  →", use_container_width=True, on_click=reset_quiz, args=("long",))
+    st.markdown("<p class='muted' style='text-align:center;margin-top:22px'>Not ready to answer yet? You can view your empty dashboard first.</p>", unsafe_allow_html=True)
+    st.button(
+        "Open dashboard without quiz  →",
+        use_container_width=True,
+        on_click=open_dashboard_without_quiz,
+        key="welcome_open_empty_dashboard",
+    )
 
 
 def render_intake() -> None:
