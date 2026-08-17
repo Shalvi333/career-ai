@@ -2195,6 +2195,17 @@ def relevant_career_results() -> tuple[dict[str, object], ...]:
 
 def displayed_career_matches() -> tuple[dict[str, object], ...]:
     """Prefer a broad local result set if backend results are too limited."""
+    # A brand-new account must not receive default careers before answering
+    # either quiz. This guard also protects other pages that reuse this helper.
+    has_written_attempt = any(
+        bool(str(value).strip()) for value in st.session_state.get("intake_answers", {}).values()
+    )
+    has_riasec_attempt = any(
+        value in {1, 2, 3, 4, 5}
+        for value in st.session_state.get("personality_answers", {}).values()
+    )
+    if not has_written_attempt and not has_riasec_attempt:
+        return tuple()
     local = relevant_career_results()
     backend = tuple(st.session_state.top_matches)
     if not backend:
@@ -2940,9 +2951,7 @@ def render_personality_results() -> None:
     scores = riasec_scores()
     ranked = sorted(scores, key=scores.get, reverse=True)
     code = "".join(ranked[:2])
-    # Never show a generic/default career before the student has completed the
-    # written quiz. The dashboard should ask them to attempt it instead.
-    scored_matches = displayed_career_matches() if career_quiz_finished else tuple()
+    scored_matches = displayed_career_matches()
     suggestions = tuple(match_title(match) for match in scored_matches[:4]) or career_suggestions()[:4]
     max_score = 10 if st.session_state.personality_mode == "riasec_short" else 50
     summary_title = "Your Quick RIASEC Career Profile" if st.session_state.personality_mode == "riasec_short" else "Your RIASEC Career Profile"
@@ -3120,7 +3129,7 @@ def render_dashboard() -> None:
     else:
         st.caption("Career quiz replaces your written interests. RIASEC re-attempt keeps those interests and lets you choose Quick or Full again.")
     live_careers, _ = load_careers_from_backend(careers_api_url())
-    scored_matches = displayed_career_matches()
+    scored_matches = displayed_career_matches() if career_quiz_finished else tuple()
     # Before RIASEC scoring, prioritise the student's discovery answers over
     # the backend's generic catalogue order. Once scored, backend matches win.
     local_suggestions = career_suggestions()
@@ -3135,7 +3144,7 @@ def render_dashboard() -> None:
     suitability_score = dashboard_suitability_score()
     if not career_quiz_finished:
         score_message = "Complete the Career Quiz first"
-        score_detail = "These are only general starting suggestions. Attempt the Career Quiz so your career, university, and scholarship recommendations use your own answers."
+        score_detail = "No suitability score is shown yet. Attempt the Career Quiz so every recommendation is based on your answers."
     elif not st.session_state.personality_complete:
         score_message = "Your strongest current career match"
         score_detail = "Calculated from your written quiz interests. Take the Quick or Full RIASEC quiz to refine the match further."
