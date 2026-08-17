@@ -1000,6 +1000,18 @@ def open_explore_careers() -> None:
     st.session_state.nav_page = "Explore Careers"
 
 
+def open_career_quiz() -> None:
+    """Open the quiz-length chooser for a student's first attempt."""
+    st.session_state.app_stage = "welcome"
+    save_current_student_state()
+
+
+def open_riasec_quiz() -> None:
+    """Open the RIASEC choices after the written career quiz is complete."""
+    st.session_state.app_stage = "intake_results"
+    save_current_student_state()
+
+
 def start_personality(mode: str) -> None:
     st.session_state.personality_mode = mode
     st.session_state.personality_index = 0
@@ -3065,25 +3077,46 @@ def render_dashboard() -> None:
     )
     quiz_col, riasec_col, _ = st.columns([1.35, 1.35, 3])
     with quiz_col:
-        st.button(
-            "↻ Re-attempt career quiz",
-            key="dashboard_reattempt_quiz",
-            use_container_width=True,
-            on_click=begin_quiz_reattempt,
-            disabled=not career_quiz_finished,
-        )
+        if career_quiz_finished:
+            st.button(
+                "↻ Re-attempt career quiz",
+                key="dashboard_reattempt_quiz",
+                use_container_width=True,
+                on_click=begin_quiz_reattempt,
+            )
+        else:
+            st.button(
+                "Take career quiz →",
+                key="dashboard_take_quiz",
+                use_container_width=True,
+                on_click=open_career_quiz,
+            )
     with riasec_col:
-        st.button(
-            "↻ Re-attempt RIASEC",
-            key="dashboard_reattempt_riasec",
-            use_container_width=True,
-            on_click=begin_riasec_reattempt,
-            disabled=not riasec_finished,
-        )
+        if riasec_finished:
+            st.button(
+                "↻ Re-attempt RIASEC",
+                key="dashboard_reattempt_riasec",
+                use_container_width=True,
+                on_click=begin_riasec_reattempt,
+            )
+        elif career_quiz_finished:
+            st.button(
+                "Take RIASEC quiz →",
+                key="dashboard_take_riasec",
+                use_container_width=True,
+                on_click=open_riasec_quiz,
+            )
+        else:
+            st.button(
+                "Take RIASEC quiz →",
+                key="dashboard_take_riasec_locked",
+                use_container_width=True,
+                disabled=True,
+            )
     if not career_quiz_finished:
-        st.caption("Finish the Career Quiz first to unlock its re-attempt option.")
+        st.caption("Take the Career Quiz to receive personalised recommendations. RIASEC becomes available after it.")
     elif not riasec_finished:
-        st.caption("Finish a Quick or Full RIASEC Quiz first to unlock its re-attempt option.")
+        st.caption("Take a Quick or Full RIASEC Quiz to refine your matches. Re-attempt becomes available after completion.")
     else:
         st.caption("Career quiz replaces your written interests. RIASEC re-attempt keeps those interests and lets you choose Quick or Full again.")
     live_careers, _ = load_careers_from_backend(careers_api_url())
