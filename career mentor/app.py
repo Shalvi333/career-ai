@@ -3053,11 +3053,16 @@ def render_change_password() -> None:
 
 def render_dashboard() -> None:
     st.markdown(f"<div class='top-title'>Hello, {escape(profile_name())} 👋</div><div class='top-subtitle'>Here is your growing career profile.</div>", unsafe_allow_html=True)
-    career_quiz_finished = (
-        st.session_state.intake_mode in {"short", "long"}
-        and len(st.session_state.intake_answers) >= len(intake_questions())
+    career_questions = intake_questions() if st.session_state.intake_mode in {"short", "long"} else tuple()
+    career_quiz_finished = bool(career_questions) and all(
+        bool(str(st.session_state.intake_answers.get(f"intake_{index}", "")).strip())
+        for index in range(len(career_questions))
     )
-    riasec_finished = bool(st.session_state.personality_complete and st.session_state.personality_answers)
+    personality_questions_saved = personality_questions() if st.session_state.personality_mode in {"riasec_short", "riasec_long"} else tuple()
+    riasec_finished = bool(personality_questions_saved) and all(
+        st.session_state.personality_answers.get(f"p_{index}") in {1, 2, 3, 4, 5}
+        for index in range(len(personality_questions_saved))
+    )
     quiz_col, riasec_col, _ = st.columns([1.35, 1.35, 3])
     with quiz_col:
         st.button(
