@@ -3078,8 +3078,15 @@ def render_dashboard() -> None:
     )
     score, matches, mentor = st.columns([1, 1.45, .7], gap="medium")
     suitability_score = dashboard_suitability_score()
-    score_message = "Your strongest current career match" if not st.session_state.personality_complete else "Your profile has a strong direction!"
-    score_detail = "Calculated from your written quiz interests. Complete RIASEC to refine it further." if not st.session_state.personality_complete else "Based on your RIASEC profile and quiz interests."
+    if not career_quiz_finished:
+        score_message = "Complete the Career Quiz first"
+        score_detail = "These are only general starting suggestions. Attempt the Career Quiz so your career, university, and scholarship recommendations use your own answers."
+    elif not st.session_state.personality_complete:
+        score_message = "Your strongest current career match"
+        score_detail = "Calculated from your written quiz interests. Take the Quick or Full RIASEC quiz to refine the match further."
+    else:
+        score_message = "Your profile has a strong direction!"
+        score_detail = "Based on your RIASEC profile and all of your career-quiz answers."
     with score: st.markdown(f"<div class='score-panel'><h3>Career Suitability Score</h3><div class='big-score'>{suitability_score}%</div><b>{score_message}</b><p>{score_detail}</p></div>", unsafe_allow_html=True)
     with matches:
         header_left, header_right = st.columns([3, 1])
@@ -3092,6 +3099,8 @@ def render_dashboard() -> None:
                 use_container_width=True,
                 on_click=open_explore_careers,
             )
+        if not career_quiz_finished:
+            st.caption("Attempt the Career Quiz to replace these general suggestions with matches based on your answers.")
         match_cards = "".join(
             f"<div class='match-card'><span class='match-pill'>{escape(match_score(match))}</span><div class='icon-bubble butterfly-mark'>🦋</div><h3>{escape(match_title(match))}</h3><p class='muted'>{escape(str(match.get('reason') or 'A promising direction based on your profile.'))}</p></div>"
             for match in scored_matches[:4]
