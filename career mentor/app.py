@@ -965,6 +965,12 @@ def begin_quiz_reattempt() -> None:
     save_current_student_state()
 
 
+def quit_current_quiz() -> None:
+    """Leave a quiz without deleting answers already entered."""
+    st.session_state.app_stage = "dashboard"
+    save_current_student_state()
+
+
 def begin_riasec_reattempt() -> None:
     """Keep the career quiz, but clear ratings so RIASEC can be taken again."""
     st.session_state.personality_mode = None
@@ -2769,28 +2775,27 @@ def render_intake() -> None:
         # and advances to the next question. Students can still type a full
         # sentence or paragraph in this field.
         answer = st.text_input("Your answer", value=st.session_state.intake_answers.get(key, ""), placeholder="Write your answer here, then press Enter…", key=f"widget_{key}")
-        previous, next_col = st.columns([1, 1])
-        # Create Next first so Enter uses this primary form action, while it
-        # still appears in the right-hand column visually. The page already
-        # has a Save/Log out control at the top, so there is only one primary
-        # form action for Enter to trigger.
-        with next_col:
-            next_label = "Finish quiz  →" if index == len(questions) - 1 else "Next question  →"
-            go_next = st.form_submit_button(next_label, type="primary", use_container_width=True)
-        with previous:
-            go_previous = index > 0 and st.form_submit_button("← Previous", use_container_width=True)
-        save_and_exit = False
+        # Keep exactly one submit button inside the form. Streamlit sends the
+        # Enter key to the first form submit control; placing Previous inside
+        # the form could therefore move backwards unexpectedly.
+        next_label = "Finish quiz  →" if index == len(questions) - 1 else "Next question  →"
+        go_next = st.form_submit_button(next_label, type="primary", use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
+    previous, quit_col = st.columns([1, 1])
+    with previous:
+        go_previous = index > 0 and st.button("← Previous", use_container_width=True, key=f"intake_previous_{index}")
+    with quit_col:
+        quit_clicked = st.button("Quit quiz", use_container_width=True, key=f"intake_quit_{index}")
+
     if go_previous:
-        st.session_state.intake_answers[key] = answer.strip()
+        st.session_state.intake_answers[key] = str(st.session_state.get(f"widget_{key}", answer)).strip()
         st.session_state.intake_index -= 1
         save_current_student_state()
         st.rerun()
-    if save_and_exit:
-        st.session_state.intake_answers[key] = answer.strip()
-        save_current_student_state()
-        log_out()
+    if quit_clicked:
+        st.session_state.intake_answers[key] = str(st.session_state.get(f"widget_{key}", answer)).strip()
+        quit_current_quiz()
         st.rerun()
     if go_next:
         validation_error = intake_answer_error(index, answer, prompt)
@@ -2856,13 +2861,16 @@ def render_personality() -> None:
     with st.form(f"personality_form_{index}", clear_on_submit=False, enter_to_submit=True):
         saved_value = st.session_state.personality_answers.get(value_key)
         value = st.radio("Your rating", (1, 2, 3, 4, 5), index=int(saved_value) - 1 if saved_value else None, horizontal=True, format_func=lambda number: {1:"1 · Strongly disagree",2:"2 · Disagree",3:"3 · Neutral",4:"4 · Agree",5:"5 · Strongly agree"}[number], key=f"radio_{value_key}")
-        previous, next_col = st.columns([1, 1])
         final = index == len(questions) - 1
-        with next_col:
-            go_next = st.form_submit_button("See results  →" if final else "Next question  →", type="primary", use_container_width=True)
-        with previous:
-            go_previous = index > 0 and st.form_submit_button("← Previous", use_container_width=True)
-        save_and_exit = False
+        # Only Next/See results is a form submit control, so Enter cannot
+        # accidentally activate Previous.
+        go_next = st.form_submit_button("See results  →" if final else "Next question  →", type="primary", use_container_width=True)
+
+    previous, quit_col = st.columns([1, 1])
+    with previous:
+        go_previous = index > 0 and st.button("← Previous", use_container_width=True, key=f"personality_previous_{index}")
+    with quit_col:
+        quit_clicked = st.button("Quit quiz", use_container_width=True, key=f"personality_quit_{index}")
 
     if go_previous:
         if value is not None:
@@ -2870,11 +2878,10 @@ def render_personality() -> None:
         st.session_state.personality_index -= 1
         save_current_student_state()
         st.rerun()
-    if save_and_exit:
+    if quit_clicked:
         if value is not None:
             st.session_state.personality_answers[value_key] = value
-        save_current_student_state()
-        log_out()
+        quit_current_quiz()
         st.rerun()
     if go_next:
         if value is None:
