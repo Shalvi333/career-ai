@@ -2645,10 +2645,15 @@ def intake_answer_error(index: int, answer: str, prompt: str = "") -> str:
     # Marks, percentages, GPA, scores, hours and budgets need a number (or a
     # legitimate N/A). Letter grades such as A or B+ are also valid for the
     # individual-subject marks question.
+    # The hobbies prompt contains the phrase “hours per week”, but it is
+    # primarily a free-text question. Students may reasonably answer “I do
+    # not track my time” or list hobbies without exact hour counts, so do not
+    # reject those answers merely because the prompt mentions hours.
+    hobby_prompt = "current hobbies" in prompt_lower or "hobbies and activities" in prompt_lower
     numeric_prompt = any(term in prompt_lower for term in (
         "percentage", "gpa", "cgpa", "scores or targets", "hours per week",
         "annual budget", "maximum amount",
-    ))
+    )) and not hobby_prompt
     marks_prompt = "marks or grades" in prompt_lower
     has_number = bool(re.search(r"\d+(?:\.\d+)?\s*%?", answer))
     has_letter_grade = bool(re.search(r"\b[A-F](?:[+-])?\b", answer))
