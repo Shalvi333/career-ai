@@ -391,7 +391,7 @@ DIRECT_CAREER_ALIASES = {
     "dance": ("dancing", "dancer", "choreography", "choreograph", "ballet", "hip hop", "hip-hop"),
     "drawing": ("drawings", "sketch", "sketching", "illustration", "illustrating", "digital art"),
     "painting": ("paintings", "painter"),
-    "music": ("singing", "singer", "song", "songs", "songwriting", "songwriter", "vocal", "vocals"),
+    "music": ("sing", "singing", "singer", "song", "songs", "songwriting", "songwriter", "vocal", "vocals"),
     "instrument": ("instruments", "instrumental", "guitar", "guitarist", "piano", "pianist", "keyboard", "violin", "violinist", "drum", "drums", "drummer", "flute", "flutist", "tabla", "sitar", "ukulele", "bass", "saxophone", "trumpet"),
     "acting": ("actress", "performing", "performance", "performer", "audition"),
     "photography": ("photographer", "photos", "photo editing"),
@@ -1106,10 +1106,18 @@ def has_positive_career_keyword(text: str, keyword: str) -> bool:
         pattern = re.compile(rf"(?<!\w){re.escape(term)}(?!\w)")
         for match in pattern.finditer(text.lower()):
             before = text[max(0, match.start() - 55):match.start()]
-            negative = re.search(
-                r"\b(?:no|not|never|don't|do not|didn't|did not|dislike|hate|avoid|isn't|is not|aren't|are not)\b[^.!?]{0,45}$",
+            negative_match = list(re.finditer(
+                r"\b(?:no|not|never|don't|do not|didn't|did not|dislike|hate|avoid|isn't|is not|aren't|are not)\b",
                 before,
-            )
+            ))
+            # Do not treat phrases such as “no time, but I like to dance” as
+            # a rejection of dance. A contrast phrase after the last negative
+            # word means the student is still expressing a positive interest.
+            negative = bool(negative_match)
+            if negative_match:
+                after_negative = before[negative_match[-1].end():]
+                if re.search(r"\b(?:but|however|although)\b", after_negative):
+                    negative = False
             if not negative:
                 return True
     return False
