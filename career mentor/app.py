@@ -1426,6 +1426,18 @@ def open_career_compare() -> None:
     st.session_state.nav_page = "Career Compare"
 
 
+def queue_navigation(page: str) -> None:
+    """Request a sidebar page change for the start of the next rerun.
+
+    Streamlit does not allow code to replace a widget-backed session value
+    after that widget has been created. The sidebar radio owns ``nav_page``,
+    so dashboard and planner buttons store their destination separately and
+    ``render_app`` applies it before rendering the sidebar on the next run.
+    """
+    if page in PAGES or (page == "Admin" and is_admin()):
+        st.session_state.pending_nav_page = page
+
+
 def open_career_quiz() -> None:
     """Open the quiz-length chooser for a student's first attempt."""
     st.session_state.app_stage = "welcome"
@@ -4162,8 +4174,7 @@ def render_weekly_planner() -> None:
             unsafe_allow_html=True,
         )
         if st.button("Explore personalised opportunities →", use_container_width=True):
-            st.session_state.nav_page = "Opportunity Board"
-            save_current_student_state()
+            queue_navigation("Opportunity Board")
             st.rerun()
     for goal in sorted(active, key=lambda item: str(item.get("due_date") or "9999-12-31")):
         detail_col, action_col = st.columns([5, 1.3], gap="medium")
@@ -4198,13 +4209,11 @@ def render_weekly_planner() -> None:
     journal_col, opportunity_col = st.columns(2)
     with journal_col:
         if st.button("Open my Career Journal 📔", use_container_width=True):
-            st.session_state.nav_page = "Career Journal"
-            save_current_student_state()
+            queue_navigation("Career Journal")
             st.rerun()
     with opportunity_col:
         if st.button("Find another opportunity ✦", use_container_width=True):
-            st.session_state.nav_page = "Opportunity Board"
-            save_current_student_state()
+            queue_navigation("Opportunity Board")
             st.rerun()
 
 
@@ -4427,8 +4436,7 @@ def render_dashboard() -> None:
             key="dashboard_open_opportunities",
             use_container_width=True,
         ):
-            st.session_state.nav_page = "Opportunity Board"
-            save_current_student_state()
+            queue_navigation("Opportunity Board")
             st.rerun()
     with planner_col:
         if st.button(
@@ -4436,8 +4444,7 @@ def render_dashboard() -> None:
             key="dashboard_open_weekly_planner",
             use_container_width=True,
         ):
-            st.session_state.nav_page = "Weekly Planner"
-            save_current_student_state()
+            queue_navigation("Weekly Planner")
             st.rerun()
     with report_col:
         if st.button(
@@ -4445,8 +4452,7 @@ def render_dashboard() -> None:
             key="dashboard_open_career_report",
             use_container_width=True,
         ):
-            st.session_state.nav_page = "Career Report"
-            save_current_student_state()
+            queue_navigation("Career Report")
             st.rerun()
 
     live_careers, _ = load_careers_from_backend(careers_api_url())
@@ -4976,11 +4982,14 @@ def render_simple_page(page: str) -> None:
 
 def render_app() -> None:
     render_theme_toggle()
+    pending_page = st.session_state.pop("pending_nav_page", "")
     saved_page = st.session_state.pop("theme_return_page", "")
-    if saved_page in PAGES or (saved_page == "Admin" and is_admin()):
+    destination = pending_page or saved_page
+    if destination in PAGES or (destination == "Admin" and is_admin()):
         # This runs before the sidebar radio widget is created, so Streamlit
-        # can safely restore its selected item on the theme-change rerun.
-        st.session_state.nav_page = saved_page
+        # can safely restore or change its selected item on this rerun.
+        st.session_state.nav_page = destination
+        save_current_student_state()
     page = render_sidebar()
     if page == "Dashboard": render_dashboard()
     elif page == "Explore Careers": render_explore_careers()
