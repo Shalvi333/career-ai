@@ -84,8 +84,8 @@ career_journal_component = components.declare_component(
 )
 initialise_database()
 
-PAGES = ("Dashboard", "Explore Careers", "Career Compare", "Opportunity Board", "Career Quest", "Career Journal", "Weekly Planner", "Skill Roadmap", "Scholarships", "Universities", "Career Report", "AI Mentor", "Accessibility", "Help & Privacy", "Change Password")
-PAGE_ICONS = {"Dashboard": "⌂", "Explore Careers": "⌕", "Career Compare": "⇄", "Opportunity Board": "✦", "Career Quest": "🎮", "Career Journal": "📔", "Weekly Planner": "✓", "Skill Roadmap": "↗", "Scholarships": "🦋", "Universities": "♜", "Career Report": "↓", "AI Mentor": "🦋", "Accessibility": "Aa", "Help & Privacy": "?", "Change Password": "🔒", "Admin": "⚙"}
+PAGES = ("Dashboard", "Explore Careers", "Career Compare", "Opportunity Board", "Career Quest", "Career Journal", "Weekly Planner", "Skill Roadmap", "Scholarships", "Universities", "Career Report", "AI Mentor", "Display Settings", "Help & Privacy", "Change Password")
+PAGE_ICONS = {"Dashboard": "⌂", "Explore Careers": "⌕", "Career Compare": "⇄", "Opportunity Board": "✦", "Career Quest": "🎮", "Career Journal": "📔", "Weekly Planner": "✓", "Skill Roadmap": "↗", "Scholarships": "🦋", "Universities": "♜", "Career Report": "↓", "AI Mentor": "🦋", "Display Settings": "◐", "Help & Privacy": "?", "Change Password": "🔒", "Admin": "⚙"}
 GLOBAL_UNIVERSITY_COUNTRIES = (
     "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria",
     "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan", "Bolivia",
@@ -1167,6 +1167,9 @@ def init_state() -> None:
     defaults = {"app_stage":"login", "auth_mode":"login", "light_mode":False, "nav_page":"Dashboard", "student_name":"", "student_email":"", "quiz_name":"", "intake_mode":None, "intake_index":0, "intake_answers":{}, "personality_mode":None, "personality_index":0, "personality_answers":{}, "personality_complete":False, "backend_profile":None, "backend_error":"", "top_matches":[], "career_insights":{}, "score_error":"", "local_roadmap_completed":set(), "mentor_history":[], "career_journal":{"version":1, "currentPage":0, "pages":[]}, "journal_last_save_token":"", "journal_reminder_checked":False, "weekly_goals":[], "weekly_reminder_checked":False, "feedback_entries":[], "accessibility_large_text":False, "accessibility_high_contrast":False, "accessibility_reduce_motion":False}
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
+    # Migrate profiles saved before this page was renamed.
+    if st.session_state.get("nav_page") == "Accessibility":
+        st.session_state.nav_page = "Display Settings"
 
 
 def session_secret() -> bytes:
@@ -1263,6 +1266,8 @@ def restore_student_state(account: dict[str, object]) -> None:
     for key in PERSISTED_PROFILE_KEYS:
         if key in saved:
             st.session_state[key] = saved[key]
+    if st.session_state.get("nav_page") == "Accessibility":
+        st.session_state.nav_page = "Display Settings"
     st.session_state.local_roadmap_completed = set(
         st.session_state.get("local_roadmap_completed", [])
     )
@@ -1320,10 +1325,32 @@ def inject_styles() -> None:
     t = dict(THEMES[theme_name()])
     if st.session_state.get("accessibility_high_contrast"):
         if theme_name() == "Light":
-            t.update(text="#16082f", muted="#493764", line="rgba(45,18,91,.55)", input_text="#08050d")
+            t.update(
+                text="#120324", muted="#32194e", card="#ffffff", soft="#ffffff",
+                line="#4b1d78", input="#ffffff", input_text="#050208",
+                shadow="rgba(31,6,65,.22)",
+            )
         else:
-            t.update(text="#ffffff", muted="#f1edf9", line="rgba(255,255,255,.48)", input_text="#ffffff")
-    large_text_css = ".stApp{font-size:1.1rem!important}" if st.session_state.get("accessibility_large_text") else ""
+            t.update(
+                bg="#080311", text="#ffffff", muted="#ffffff", card="#100620",
+                soft="#160a2a", line="#ffffff", input="#0c0617",
+                input_text="#ffffff", shadow="rgba(0,0,0,.55)",
+            )
+    # Most of the interface uses rem units, so the root font size must change.
+    # Setting only .stApp's font size left headings, inputs and buttons unchanged.
+    large_text_css = (
+        "html{font-size:19px!important}body,.stApp{font-size:1rem!important}"
+        "@media(max-width:900px){html{font-size:18px!important}}"
+        if st.session_state.get("accessibility_large_text") else ""
+    )
+    high_contrast_css = (
+        ".panel,.choice-card,.question-card,.match-card,.ai-card,.score-panel{border-width:2px!important}"
+        "[data-testid='stSidebar']{border-right:2px solid #fff!important}"
+        "div[data-baseweb='input'],div[data-baseweb='textarea'],"
+        "[data-testid='stSelectbox'] [data-baseweb='select']>div{border:2px solid var(--line)!important}"
+        "a{text-decoration:underline!important;text-decoration-thickness:2px!important}"
+        if st.session_state.get("accessibility_high_contrast") else ""
+    )
     reduce_motion_css = "*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}" if st.session_state.get("accessibility_reduce_motion") else ""
     st.markdown(f"""<style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
@@ -1348,6 +1375,7 @@ def inject_styles() -> None:
     [data-testid='stAlert']{{background:var(--card)!important;border:1px solid var(--line)!important;border-radius:12px!important;box-shadow:0 8px 22px var(--shadow)!important}}
     [data-testid='stAlert'] *,[data-testid='stAlert'] p,[data-testid='stAlert'] div{{color:var(--text)!important;-webkit-text-fill-color:var(--text)!important}}
     {large_text_css}
+    {high_contrast_css}
     {reduce_motion_css}
     button:focus-visible,input:focus-visible,textarea:focus-visible,[role='radio']:focus-visible,[role='combobox']:focus-visible,a:focus-visible{{outline:3px solid #ff5b7d!important;outline-offset:3px!important}}
     @media(prefers-reduced-motion:reduce){{*,*::before,*::after{{animation:none!important;transition:none!important;scroll-behavior:auto!important}}}}
@@ -4459,8 +4487,8 @@ def current_student_export() -> dict[str, object]:
 def render_accessibility() -> None:
     """Let each student keep readable, lower-motion display preferences."""
     st.markdown(
-        "<div class='top-title'>Accessibility</div>"
-        "<div class='top-subtitle'>Adjust Career AI so it is more comfortable to read and navigate.</div>",
+        "<div class='top-title'>Display Settings</div>"
+        "<div class='top-subtitle'>Make Career AI easier and more comfortable to read. Changes apply immediately.</div>",
         unsafe_allow_html=True,
     )
     st.markdown(
@@ -4469,22 +4497,36 @@ def render_accessibility() -> None:
         unsafe_allow_html=True,
     )
     st.toggle(
-        "Larger interface text",
+        "Make text larger",
         key="accessibility_large_text",
-        help="Makes the main interface text larger without changing your browser settings.",
+        help="Enlarges headings, questions, controls and body text throughout the app.",
         on_change=save_current_student_state,
     )
     st.toggle(
-        "Higher contrast",
+        "Use extra-high contrast",
         key="accessibility_high_contrast",
-        help="Strengthens text and border contrast in the current theme.",
+        help="Uses stronger text, panel, border and input contrast in the current theme.",
         on_change=save_current_student_state,
     )
     st.toggle(
-        "Reduce motion",
+        "Turn off animations and motion",
         key="accessibility_reduce_motion",
         help="Stops decorative transitions and animations.",
         on_change=save_current_student_state,
+    )
+    enabled_settings = []
+    if st.session_state.get("accessibility_large_text"):
+        enabled_settings.append("larger text")
+    if st.session_state.get("accessibility_high_contrast"):
+        enabled_settings.append("extra-high contrast")
+    if st.session_state.get("accessibility_reduce_motion"):
+        enabled_settings.append("motion turned off")
+    active_summary = ", ".join(enabled_settings) if enabled_settings else "standard display"
+    st.markdown(
+        "<div class='panel'><h3>Live preview</h3>"
+        f"<p>Your active settings: <b>{escape(active_summary)}</b>.</p>"
+        "<p class='muted'>This sample panel changes as soon as you use a switch above.</p></div>",
+        unsafe_allow_html=True,
     )
     st.markdown(
         "<div class='panel'><h3>Keyboard navigation</h3>"
@@ -4493,7 +4535,7 @@ def render_accessibility() -> None:
         "<p class='muted'>Career AI also respects your device's reduced-motion preference automatically.</p></div>",
         unsafe_allow_html=True,
     )
-    if st.button("Reset accessibility preferences", use_container_width=True):
+    if st.button("Reset display preferences", use_container_width=True):
         st.session_state.accessibility_large_text = False
         st.session_state.accessibility_high_contrast = False
         st.session_state.accessibility_reduce_motion = False
@@ -5218,7 +5260,7 @@ def render_app() -> None:
     elif page == "Scholarships": render_scholarships()
     elif page == "Career Report": render_career_report()
     elif page == "AI Mentor": render_ai_mentor()
-    elif page == "Accessibility": render_accessibility()
+    elif page == "Display Settings": render_accessibility()
     elif page == "Help & Privacy": render_help_privacy()
     elif page == "Change Password": render_change_password()
     elif page == "Admin": render_admin()
