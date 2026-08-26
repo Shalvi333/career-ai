@@ -71,8 +71,8 @@ DEFAULT_OLLAMA_MODEL = "llama3.2"
 st.set_page_config(page_title="Career AI", page_icon=LOGO_PATH, layout="wide", initial_sidebar_state="expanded")
 initialise_database()
 
-PAGES = ("Dashboard", "Explore Careers", "Skill Roadmap", "Scholarships", "Universities", "AI Mentor", "Change Password")
-PAGE_ICONS = {"Dashboard": "⌂", "Explore Careers": "⌕", "Skill Roadmap": "↗", "Scholarships": "🦋", "Universities": "♜", "AI Mentor": "🦋", "Change Password": "🔒", "Admin": "⚙"}
+PAGES = ("Dashboard", "Explore Careers", "Career Quest", "Skill Roadmap", "Scholarships", "Universities", "AI Mentor", "Change Password")
+PAGE_ICONS = {"Dashboard": "⌂", "Explore Careers": "⌕", "Career Quest": "🎮", "Skill Roadmap": "↗", "Scholarships": "🦋", "Universities": "♜", "AI Mentor": "🦋", "Change Password": "🔒", "Admin": "⚙"}
 GLOBAL_UNIVERSITY_COUNTRIES = (
     "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria",
     "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan", "Bolivia",
@@ -97,6 +97,84 @@ QUOTES = (
     "Choose a path that lets your strengths grow.",
     "A career is explored one thoughtful step at a time.",
     "Your interests are clues, not limits.",
+)
+
+# A lightweight game that helps students discover what different careers
+# actually do. Five questions are selected for each round so replaying stays
+# fresh without affecting the student's real quiz results.
+CAREER_GAME_QUESTIONS = (
+    {
+        "clue": "I study how people use apps, test layouts, and improve confusing screens. Who am I?",
+        "options": ("UX Designer", "Accountant", "Civil Engineer", "Pharmacist"),
+        "answer": "UX Designer",
+        "explanation": "UX designers research users and improve how digital products feel and function.",
+    },
+    {
+        "clue": "I examine habitats, track animals, and use field research to protect species. Who am I?",
+        "options": ("Wildlife Biologist", "Journalist", "Architect", "Financial Analyst"),
+        "answer": "Wildlife Biologist",
+        "explanation": "Wildlife biologists study animals, ecosystems, and the effects of environmental change.",
+    },
+    {
+        "clue": "I turn tables of numbers into patterns, charts, and useful business decisions. Who am I?",
+        "options": ("Data Analyst", "Chef", "Music Teacher", "Physiotherapist"),
+        "answer": "Data Analyst",
+        "explanation": "Data analysts clean, explore, and communicate data so people can make informed decisions.",
+    },
+    {
+        "clue": "I help people recover movement and strength after an injury or operation. Who am I?",
+        "options": ("Physiotherapist", "Animator", "Lawyer", "Astronomer"),
+        "answer": "Physiotherapist",
+        "explanation": "Physiotherapists assess movement and guide exercises that support recovery and mobility.",
+    },
+    {
+        "clue": "I plan safe and useful buildings by combining creativity, measurements, and construction knowledge. Who am I?",
+        "options": ("Architect", "Marine Biologist", "Cricketer", "Psychologist"),
+        "answer": "Architect",
+        "explanation": "Architects design buildings while balancing appearance, safety, space, and practical needs.",
+    },
+    {
+        "clue": "I design menus, manage a kitchen, and combine ingredients, timing, and presentation. Who am I?",
+        "options": ("Chef", "Cybersecurity Analyst", "Geologist", "Product Manager"),
+        "answer": "Chef",
+        "explanation": "Chefs use culinary technique, creativity, teamwork, and time management to create food experiences.",
+    },
+    {
+        "clue": "I investigate stories, interview people, verify facts, and explain events to the public. Who am I?",
+        "options": ("Journalist", "Dentist", "Game Developer", "Pilot"),
+        "answer": "Journalist",
+        "explanation": "Journalists research and verify information before communicating it through print, video, audio, or digital media.",
+    },
+    {
+        "clue": "I look for suspicious activity in computer systems and help protect information from attacks. Who am I?",
+        "options": ("Cybersecurity Analyst", "Fashion Designer", "Veterinarian", "Sports Coach"),
+        "answer": "Cybersecurity Analyst",
+        "explanation": "Cybersecurity analysts monitor risks, investigate threats, and strengthen digital defenses.",
+    },
+    {
+        "clue": "I study pollution, climate, soil, or water and help develop solutions for the planet. Who am I?",
+        "options": ("Environmental Scientist", "Investment Banker", "Actor", "Interior Designer"),
+        "answer": "Environmental Scientist",
+        "explanation": "Environmental scientists collect evidence and solve problems involving natural resources and human impact.",
+    },
+    {
+        "clue": "I make characters and objects appear to move for films, games, advertisements, or learning videos. Who am I?",
+        "options": ("Animator", "Surgeon", "Economist", "Electrician"),
+        "answer": "Animator",
+        "explanation": "Animators combine art, storytelling, timing, and software to create movement frame by frame.",
+    },
+    {
+        "clue": "I plan practice sessions, study performance, and help athletes improve their technique and teamwork. Who am I?",
+        "options": ("Sports Coach", "Chemist", "Web Developer", "Librarian"),
+        "answer": "Sports Coach",
+        "explanation": "Sports coaches teach technique, build strategies, motivate athletes, and monitor development.",
+    },
+    {
+        "clue": "I use physics, mathematics, and engineering to work on aircraft, spacecraft, or flight systems. Who am I?",
+        "options": ("Aerospace Engineer", "Clinical Psychologist", "Photographer", "Human Resources Manager"),
+        "answer": "Aerospace Engineer",
+        "explanation": "Aerospace engineers design and test systems that operate in the atmosphere or space.",
+    },
 )
 
 # Direct websites for frequently recommended institutions. Every other entry
@@ -3017,6 +3095,117 @@ def render_personality_results() -> None:
         st.rerun()
 
 
+def start_career_game() -> None:
+    """Create a fresh five-question Career Quest round."""
+    question_count = min(5, len(CAREER_GAME_QUESTIONS))
+    st.session_state.career_game_order = random.sample(range(len(CAREER_GAME_QUESTIONS)), question_count)
+    st.session_state.career_game_index = 0
+    st.session_state.career_game_score = 0
+    st.session_state.career_game_answered = False
+    st.session_state.career_game_feedback = {}
+    st.session_state.career_game_complete = False
+    st.session_state.career_game_celebrated = False
+    st.session_state.career_game_round = int(st.session_state.get("career_game_round", 0)) + 1
+
+
+def render_career_game() -> None:
+    """Render a small, replayable career-clue guessing game."""
+    order = st.session_state.get("career_game_order")
+    if not isinstance(order, list) or not order or any(not isinstance(item, int) or item >= len(CAREER_GAME_QUESTIONS) for item in order):
+        start_career_game()
+        order = st.session_state.career_game_order
+
+    st.markdown(
+        "<div class='top-title'>🎮 Career Quest</div>"
+        "<div class='top-subtitle'>Guess the career from each clue and discover what different professionals actually do.</div>",
+        unsafe_allow_html=True,
+    )
+
+    if st.session_state.get("career_game_complete", False):
+        score = int(st.session_state.get("career_game_score", 0))
+        total = len(order)
+        if not st.session_state.get("career_game_celebrated", False):
+            st.balloons()
+            st.session_state.career_game_celebrated = True
+        if score == total:
+            result_title, result_note = "Career Expert!", "Perfect score—you matched every clue to its career."
+        elif score >= max(1, total - 2):
+            result_title, result_note = "Career Explorer!", "Great work—you already understand many different career roles."
+        else:
+            result_title, result_note = "Curious Starter!", "Every clue you explored added a new career to your mental map."
+        st.markdown(
+            f"<div class='panel' style='text-align:center;max-width:760px;margin:20px auto'>"
+            f"<div class='result-code'>{score}/{total}</div><h2>{result_title}</h2>"
+            f"<p class='muted'>{result_note}</p></div>",
+            unsafe_allow_html=True,
+        )
+        replay_col, dashboard_col = st.columns(2)
+        with replay_col:
+            if st.button("↻ Play another round", use_container_width=True, key="career_game_replay"):
+                start_career_game()
+                st.rerun()
+        with dashboard_col:
+            st.button(
+                "Open dashboard →",
+                use_container_width=True,
+                key="career_game_dashboard",
+                on_click=lambda: st.session_state.update(nav_page="Dashboard"),
+            )
+        return
+
+    index = min(int(st.session_state.get("career_game_index", 0)), len(order) - 1)
+    question = CAREER_GAME_QUESTIONS[order[index]]
+    answered = bool(st.session_state.get("career_game_answered", False))
+    progress = (index + 1) / len(order)
+    st.markdown(
+        f"<div class='panel'><span class='match-pill'>Clue {index + 1} of {len(order)}</span>"
+        f"<h2 style='margin-top:28px'>{escape(question['clue'])}</h2></div>",
+        unsafe_allow_html=True,
+    )
+    st.progress(progress)
+    choice = st.radio(
+        "Choose your answer",
+        question["options"],
+        index=None,
+        key=f"career_game_choice_{st.session_state.career_game_round}_{index}",
+        disabled=answered,
+    )
+
+    if not answered:
+        if st.button("Lock my answer →", use_container_width=True, key=f"career_game_lock_{index}"):
+            if choice is None:
+                st.error("Choose one career before locking your answer.")
+                return
+            correct = choice == question["answer"]
+            if correct:
+                st.session_state.career_game_score += 1
+            st.session_state.career_game_feedback = {"correct": correct, "choice": choice}
+            st.session_state.career_game_answered = True
+            st.rerun()
+        return
+
+    feedback = st.session_state.get("career_game_feedback", {})
+    if feedback.get("correct"):
+        st.success(f"Correct! {question['answer']} is the answer.")
+    else:
+        st.warning(f"Good try! You chose {feedback.get('choice', 'another option')}. The answer is {question['answer']}.")
+    st.info(question["explanation"])
+
+    final_question = index == len(order) - 1
+    if st.button(
+        "See my score →" if final_question else "Next clue →",
+        use_container_width=True,
+        key=f"career_game_next_{index}",
+    ):
+        if final_question:
+            st.session_state.career_game_complete = True
+        else:
+            st.session_state.career_game_index = index + 1
+            st.session_state.career_game_answered = False
+            st.session_state.career_game_feedback = {}
+        st.rerun()
+
+
 def render_sidebar() -> str:
     with st.sidebar:
         logo_col, name_col = st.columns([.3, .7], gap="small")
@@ -3576,6 +3765,7 @@ def render_app() -> None:
     page = render_sidebar()
     if page == "Dashboard": render_dashboard()
     elif page == "Explore Careers": render_explore_careers()
+    elif page == "Career Quest": render_career_game()
     elif page == "Skill Roadmap": render_skill_roadmap()
     elif page == "Universities": render_universities()
     elif page == "Scholarships": render_scholarships()
