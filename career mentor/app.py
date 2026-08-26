@@ -3297,7 +3297,7 @@ def render_career_game() -> None:
 def normalise_career_journal(raw: object) -> dict[str, object]:
     """Keep journal data compact, JSON-safe, and suitable for account storage."""
     if not isinstance(raw, dict):
-        return {"version": 1, "currentPage": 0, "pages": []}
+        return {"version": 2, "currentPage": 0, "monthNotes": {}, "pages": []}
 
     allowed_fonts = {"DM Sans", "Caveat", "Lora", "Playfair Display", "Quicksand"}
     allowed_papers = {"cream", "blush", "lavender", "sage", "sky", "peach"}
@@ -3340,7 +3340,7 @@ def normalise_career_journal(raw: object) -> dict[str, object]:
         clean_decorations: list[dict[str, object]] = []
         decorations = page.get("decorations", [])
         if isinstance(decorations, list):
-            for decoration_number, decoration in enumerate(decorations[:80]):
+            for decoration_number, decoration in enumerate(decorations[:120]):
                 if not isinstance(decoration, dict):
                     continue
                 decoration_type = str(decoration.get("type", "sticker"))
@@ -3350,7 +3350,8 @@ def normalise_career_journal(raw: object) -> dict[str, object]:
                     "id": str(decoration.get("id") or f"decor-{decoration_number + 1}")[:80],
                     "type": decoration_type,
                     "sticker": int(bounded_number(decoration.get("sticker", 0), 0, 19, 0)),
-                    "tapeStyle": int(bounded_number(decoration.get("tapeStyle", 0), 0, 7, 0)),
+                    "stickerPack": int(bounded_number(decoration.get("stickerPack", 0), 0, 1, 0)),
+                    "tapeStyle": int(bounded_number(decoration.get("tapeStyle", 0), 0, 15, 0)),
                     "x": bounded_number(decoration.get("x", 50), 0, 100, 50),
                     "y": bounded_number(decoration.get("y", 50), 0, 100, 50),
                     "size": bounded_number(decoration.get("size", 90), 30, 240, 90),
@@ -3360,7 +3361,14 @@ def normalise_career_journal(raw: object) -> dict[str, object]:
         clean_pages.append(clean_page)
 
     current_page = int(bounded_number(raw.get("currentPage", 0), 0, max(0, len(clean_pages) - 1), 0))
-    return {"version": 1, "currentPage": current_page, "pages": clean_pages}
+    clean_month_notes: dict[str, str] = {}
+    month_notes = raw.get("monthNotes", {})
+    if isinstance(month_notes, dict):
+        for month, note in list(month_notes.items())[:36]:
+            month_key = str(month)
+            if re.fullmatch(r"\d{4}-\d{2}", month_key):
+                clean_month_notes[month_key] = str(note)[:1500]
+    return {"version": 2, "currentPage": current_page, "monthNotes": clean_month_notes, "pages": clean_pages}
 
 
 def render_career_journal() -> None:

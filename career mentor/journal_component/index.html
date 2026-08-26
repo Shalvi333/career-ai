@@ -73,6 +73,47 @@
     }
     .theme-light .glass-button.secondary { background: rgba(87, 53, 138, .08); border-color: rgba(87, 53, 138, .18); }
     .glass-button:disabled { opacity: .35; cursor: not-allowed; transform: none; }
+    .calendar-panel {
+      display: none;
+      margin: 0 0 20px;
+      padding: 18px;
+      border: 1px solid rgba(224, 199, 255, .24);
+      border-radius: 22px;
+      background: linear-gradient(145deg, rgba(255,255,255,.1), rgba(255,255,255,.045));
+      box-shadow: 0 18px 36px rgba(23, 10, 45, .15);
+    }
+    .calendar-panel.open { display: block; animation: calendarReveal .24s ease both; }
+    .theme-light .calendar-panel { background: rgba(255,255,255,.72); border-color: rgba(92,54,145,.15); }
+    @keyframes calendarReveal { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+    .calendar-top { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+    .calendar-top h3 { margin: 0; font: 700 clamp(21px, 3vw, 31px) "Playfair Display", serif; }
+    .calendar-month-nav { display: flex; align-items: center; gap: 9px; }
+    .calendar-month-nav .glass-button { padding: 8px 12px; }
+    .calendar-layout { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 18px; margin-top: 15px; align-items: start; }
+    .weekday-row, .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 7px; }
+    .weekday { text-align: center; font-size: 11px; font-weight: 800; letter-spacing: .08em; opacity: .58; padding: 4px; }
+    .calendar-day {
+      position: relative; min-height: 62px; border: 1px solid rgba(255,255,255,.15); border-radius: 13px;
+      background: rgba(255,255,255,.07); color: inherit; font-weight: 700; text-align: left; padding: 9px;
+      transition: transform .16s ease, background .16s ease, border-color .16s ease;
+    }
+    .theme-light .calendar-day { background: rgba(94,59,145,.055); border-color: rgba(94,59,145,.1); }
+    .calendar-day:hover { transform: translateY(-2px); background: rgba(215,107,141,.18); border-color: rgba(240,132,156,.48); }
+    .calendar-day.today::after { content: "today"; position: absolute; right: 7px; top: 7px; font-size: 8px; color: #f9a5bd; text-transform: uppercase; letter-spacing: .06em; }
+    .theme-light .calendar-day.today::after { color: #9a4262; }
+    .calendar-day.has-entry { background: linear-gradient(145deg, rgba(124,58,237,.36), rgba(239,94,125,.28)); border-color: rgba(236,153,195,.5); }
+    .calendar-day.has-entry::before { content: "✦"; position: absolute; right: 8px; bottom: 6px; color: #ffd6e4; }
+    .theme-light .calendar-day.has-entry { color: #3f245f; background: linear-gradient(145deg, rgba(124,58,237,.15), rgba(239,94,125,.13)); }
+    .calendar-day.selected { outline: 2px solid #ef5e7d; outline-offset: 2px; }
+    .calendar-blank { min-height: 62px; }
+    .month-note {
+      border: 1px solid rgba(255,255,255,.16); border-radius: 17px; padding: 14px; background: rgba(255,255,255,.07);
+    }
+    .theme-light .month-note { background: rgba(94,59,145,.055); border-color: rgba(94,59,145,.1); }
+    .month-note h4 { margin: 0 0 8px; font-family: "Caveat", cursive; font-size: 24px; color: #f3abc1; }
+    .theme-light .month-note h4 { color: #9c536a; }
+    .month-note textarea { width: 100%; min-height: 190px; resize: vertical; border: 0; border-radius: 12px; padding: 11px; color: #49365f; background: rgba(255,255,255,.9); line-height: 1.55; }
+    .calendar-help { margin: 10px 0 0; opacity: .66; font-size: 12px; line-height: 1.5; }
     .workspace { display: grid; grid-template-columns: 248px minmax(0, 1fr); gap: 20px; align-items: start; }
     .toolbox {
       position: sticky;
@@ -104,12 +145,14 @@
       border: 1px solid rgba(255,255,255,.2);
       border-radius: 10px;
       background-color: rgba(255,255,255,.85);
-      background-image: url("stickers.png");
       background-size: 400% 500%;
       background-repeat: no-repeat;
       transition: transform .16s ease, box-shadow .16s ease;
     }
+    .sticker-choice.pack-0 { background-image: url("stickers.png"); }
+    .sticker-choice.pack-1 { background-image: url("stickers-v2.png"); }
     .sticker-choice:hover { transform: rotate(-3deg) scale(1.08); box-shadow: 0 6px 14px rgba(45,23,50,.24); }
+    .drawer-label { margin: 10px 0 6px; font: 700 12px "Caveat", cursive; letter-spacing: .04em; opacity: .78; }
     .tape-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
     .tape-choice { height: 32px; border: 0; border-radius: 5px; box-shadow: 0 3px 8px rgba(35,20,38,.18); }
     .tape-0 { background: repeating-linear-gradient(45deg,#f9a8b8 0 9px,#ffd4dc 9px 18px); }
@@ -120,6 +163,14 @@
     .tape-5 { background: linear-gradient(90deg,#8ac6d1,#bce9e8,#8ac6d1); }
     .tape-6 { background: repeating-linear-gradient(90deg,#bc6b7e 0 4px,#eab4be 4px 8px); }
     .tape-7 { background: linear-gradient(90deg,#d8c2a4,#f6ead4,#d8c2a4); }
+    .tape-8 { background: repeating-linear-gradient(45deg,#cbb6ed 0 8px,#f3eaff 8px 16px); }
+    .tape-9 { background: radial-gradient(circle at 6px 6px,#6f568f 0 2px,transparent 2.5px),#dccdec; background-size: 13px 13px; }
+    .tape-10 { background: repeating-linear-gradient(90deg,#f0b8a8 0 10px,#fff2dd 10px 13px,#bd8f79 13px 16px); }
+    .tape-11 { background: linear-gradient(90deg,#65477f,#b697c9,#e8d6ef,#b697c9,#65477f); }
+    .tape-12 { background: repeating-linear-gradient(-45deg,#8ca98c 0 5px,#dfead1 5px 10px,#f5ecd5 10px 15px); }
+    .tape-13 { background: radial-gradient(ellipse at center,#fff1c9 0 22%,transparent 24%),#cf82a1; background-size: 22px 16px; }
+    .tape-14 { background: repeating-linear-gradient(0deg,#9ebbd1 0 3px,#e8f0f4 3px 6px); }
+    .tape-15 { background: linear-gradient(90deg,#c68b6d,#e9c7aa 25%,#f6ead6 50%,#e9c7aa 75%,#c68b6d); }
     .selection-controls { display: none; }
     .selection-controls.visible { display: block; }
     input[type="range"] { width: 100%; accent-color: #d76b8d; }
@@ -201,8 +252,14 @@
     }
     .decoration:active { cursor: grabbing; }
     .decoration.selected { filter: drop-shadow(0 0 0 #fff) drop-shadow(0 0 8px #d75e86); outline: 2px dashed rgba(161,67,99,.6); outline-offset: 4px; }
-    .placed-sticker { aspect-ratio: 5 / 6; background-image: url("stickers.png"); background-size: 400% 500%; background-repeat: no-repeat; }
+    .placed-sticker { aspect-ratio: 5 / 6; background-size: 400% 500%; background-repeat: no-repeat; }
     .placed-washi { height: 35px; opacity: .82; clip-path: polygon(2% 4%,98% 0,100% 92%,1% 100%); }
+    .decoration-delete {
+      display: none; position: absolute; z-index: 3; top: -16px; right: -16px; width: 30px; height: 30px;
+      align-items: center; justify-content: center; border: 2px solid #fff; border-radius: 50%; color: #fff;
+      background: #c84263; font: 800 20px/1 "DM Sans", sans-serif; box-shadow: 0 4px 10px rgba(61,26,42,.3);
+    }
+    .decoration.selected .decoration-delete { display: flex; }
     .book-hint { text-align: center; opacity: .68; margin: 13px 0 0; font-size: 13px; }
     .save-row { display: flex; justify-content: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
     .saved-note { opacity: 0; transition: opacity .2s ease; font-weight: 700; color: #83e2bd; align-self: center; }
@@ -214,6 +271,7 @@
       .toolbox { position: relative; max-height: none; }
       .sticker-grid { grid-template-columns: repeat(10, minmax(38px, 1fr)); }
       .tape-grid { grid-template-columns: repeat(4, 1fr); }
+      .calendar-layout { grid-template-columns: minmax(0, 1fr) 220px; }
     }
     @media (max-width: 760px) {
       .journal-shell { padding: 12px; border-radius: 19px; }
@@ -226,6 +284,10 @@
       .paper-page:first-child { border-radius: 18px 18px 4px 4px; box-shadow: inset 0 -15px 25px rgba(71,45,43,.05); }
       .paper-page:nth-child(2) { border-radius: 4px 4px 18px 18px; box-shadow: inset 0 15px 25px rgba(71,45,43,.05); }
       .mini-grid { grid-template-columns: 1fr; }
+      .calendar-layout { grid-template-columns: 1fr; }
+      .calendar-day, .calendar-blank { min-height: 48px; padding: 7px; }
+      .calendar-day.today::after { display: none; }
+      .month-note textarea { min-height: 120px; }
     }
   </style>
 </head>
@@ -237,12 +299,42 @@
         <p id="welcomeCopy">A scrapbook for the future you are building.</p>
       </div>
       <div class="page-nav">
+        <button class="glass-button secondary" id="toggleCalendar" aria-expanded="false">▦ Monthly calendar</button>
         <button class="glass-button secondary" id="prevPage" aria-label="Previous journal page">← Previous</button>
         <strong id="pageCounter">Page 1 of 1</strong>
         <button class="glass-button secondary" id="nextPage" aria-label="Next journal page">Next →</button>
         <button class="glass-button" id="newPage">＋ New day</button>
       </div>
     </header>
+
+    <section class="calendar-panel" id="calendarPanel" aria-label="Monthly career journal calendar">
+      <div class="calendar-top">
+        <div>
+          <h3>Monthly career calendar ✦</h3>
+          <p class="calendar-help">Choose a date to open its diary entry. A sparkle means that day already has an entry.</p>
+        </div>
+        <div class="calendar-month-nav">
+          <button class="glass-button secondary" id="calendarPrevMonth" aria-label="Previous month">←</button>
+          <strong id="calendarMonthTitle">Month</strong>
+          <button class="glass-button secondary" id="calendarNextMonth" aria-label="Next month">→</button>
+          <button class="glass-button secondary" id="closeCalendar">Close</button>
+        </div>
+      </div>
+      <div class="calendar-layout">
+        <div>
+          <div class="weekday-row" aria-hidden="true">
+            <div class="weekday">MON</div><div class="weekday">TUE</div><div class="weekday">WED</div><div class="weekday">THU</div>
+            <div class="weekday">FRI</div><div class="weekday">SAT</div><div class="weekday">SUN</div>
+          </div>
+          <div class="calendar-grid" id="calendarGrid"></div>
+        </div>
+        <aside class="month-note">
+          <h4>A little intention for this month</h4>
+          <textarea id="monthNote" maxlength="1500" placeholder="A skill to practise, an application deadline, a conversation to have, or a promise to yourself…"></textarea>
+          <p class="calendar-help">Your monthly note is included when you save the journal.</p>
+        </aside>
+      </div>
+    </section>
 
     <section class="workspace">
       <aside class="toolbox">
@@ -263,7 +355,10 @@
 
         <div class="tool-section">
           <h3 class="tool-title">Sticker drawer</h3>
+          <p class="drawer-label">Cottage garden</p>
           <div class="sticker-grid" id="stickerGrid" aria-label="Add a sticker"></div>
+          <p class="drawer-label">Lavender daydreams</p>
+          <div class="sticker-grid" id="stickerGridV2" aria-label="Add a lavender sticker"></div>
           <p class="empty-note">Tap to add. Then drag it anywhere on the open diary.</p>
         </div>
 
@@ -278,7 +373,7 @@
           <input id="sizeSlider" type="range" min="30" max="240" value="90" />
           <label class="field-label" for="rotationSlider">Tilt</label>
           <input id="rotationSlider" type="range" min="-180" max="180" value="0" />
-          <button class="danger-button" id="removeDecoration">Remove selected</button>
+          <button class="danger-button" id="removeDecoration">Delete selected sticker / tape</button>
         </div>
 
         <div class="tool-section">
@@ -317,7 +412,7 @@
             <span class="page-number" id="rightPageNumber">2</span>
           </section>
         </div>
-        <p class="book-hint">Drag decorations across either page · select one to resize or rotate · your writing saves only when you press the button below.</p>
+        <p class="book-hint">Drag decorations across either page · select one to resize, rotate or delete it · your writing saves only when you press the button below.</p>
         <div class="save-row">
           <button class="glass-button" id="saveJournal">Save journal to my account ✦</button>
           <button class="glass-button secondary" id="exportJournal">Download backup</button>
@@ -334,15 +429,21 @@
       value(value) { window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setComponentValue", value, dataType: "json" }, "*"); }
     };
 
-    const blankPage = () => ({
+    const localDateISO = date => {
+      const value = date instanceof Date ? date : new Date();
+      const year = value.getFullYear(), month = String(value.getMonth() + 1).padStart(2, "0"), day = String(value.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+    const blankPage = (date = localDateISO(new Date())) => ({
       id: `page-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      date: new Date().toISOString().slice(0, 10), title: "", goal: "", steps: "", win: "", reflection: "", nextStep: "", mood: "", dayWord: "", futureNote: "",
+      date, title: "", goal: "", steps: "", win: "", reflection: "", nextStep: "", mood: "", dayWord: "", futureNote: "",
       font: "DM Sans", color: "#49365f", paper: "cream", decorations: []
     });
-    let model = { version: 1, currentPage: 0, pages: [blankPage()] };
+    let model = { version: 2, currentPage: 0, monthNotes: {}, pages: [blankPage()] };
     let selectedDecoration = null;
     let renderedOnce = false;
     let isAnimating = false;
+    let calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
     const book = document.getElementById("book");
     const pageFields = [...document.querySelectorAll(".page-field")];
@@ -352,45 +453,52 @@
     const selectionControls = document.getElementById("selectionControls");
     const sizeSlider = document.getElementById("sizeSlider");
     const rotationSlider = document.getElementById("rotationSlider");
+    const calendarPanel = document.getElementById("calendarPanel");
+    const monthNote = document.getElementById("monthNote");
 
     function safeModel(incoming) {
-      if (!incoming || typeof incoming !== "object") return { version: 1, currentPage: 0, pages: [blankPage()] };
+      if (!incoming || typeof incoming !== "object") return { version: 2, currentPage: 0, monthNotes: {}, pages: [blankPage()] };
       const pages = Array.isArray(incoming.pages) && incoming.pages.length ? incoming.pages : [blankPage()];
-      return { version: 1, currentPage: Math.max(0, Math.min(Number(incoming.currentPage) || 0, pages.length - 1)), pages };
+      const monthNotes = incoming.monthNotes && typeof incoming.monthNotes === "object" && !Array.isArray(incoming.monthNotes) ? incoming.monthNotes : {};
+      return { version: 2, currentPage: Math.max(0, Math.min(Number(incoming.currentPage) || 0, pages.length - 1)), monthNotes, pages };
     }
     function page() { return model.pages[model.currentPage]; }
     function spritePosition(index) {
       const col = index % 4, row = Math.floor(index / 4);
       return `${col * (100 / 3)}% ${row * 25}%`;
     }
-    function setSprite(element, index) { element.style.backgroundPosition = spritePosition(index); }
+    function setSprite(element, index, pack = 0) {
+      element.style.backgroundImage = `url("${Number(pack) === 1 ? "stickers-v2.png" : "stickers.png"}")`;
+      element.style.backgroundPosition = spritePosition(index);
+    }
     function buildPalettes() {
-      const grid = document.getElementById("stickerGrid");
-      grid.innerHTML = "";
-      for (let index = 0; index < 20; index += 1) {
-        const button = document.createElement("button");
-        button.className = "sticker-choice";
-        button.type = "button";
-        button.title = "Add sticker";
-        setSprite(button, index);
-        button.addEventListener("click", () => addDecoration("sticker", index));
-        grid.appendChild(button);
-      }
+      [[document.getElementById("stickerGrid"), 0], [document.getElementById("stickerGridV2"), 1]].forEach(([grid, pack]) => {
+        grid.innerHTML = "";
+        for (let index = 0; index < 20; index += 1) {
+          const button = document.createElement("button");
+          button.className = `sticker-choice pack-${pack}`;
+          button.type = "button";
+          button.title = `Add ${pack === 1 ? "lavender" : "cottage"} sticker`;
+          setSprite(button, index, pack);
+          button.addEventListener("click", () => addDecoration("sticker", index, pack));
+          grid.appendChild(button);
+        }
+      });
       const tapeGrid = document.getElementById("tapeGrid");
       tapeGrid.innerHTML = "";
-      for (let index = 0; index < 8; index += 1) {
+      for (let index = 0; index < 16; index += 1) {
         const button = document.createElement("button");
         button.className = `tape-choice tape-${index}`;
         button.type = "button";
         button.title = "Add washi tape";
-        button.addEventListener("click", () => addDecoration("washi", index));
+        button.addEventListener("click", () => addDecoration("washi", index, 0));
         tapeGrid.appendChild(button);
       }
     }
-    function addDecoration(type, index) {
+    function addDecoration(type, index, pack = 0) {
       const decoration = {
         id: `decor-${Date.now()}-${Math.random().toString(16).slice(2)}`, type,
-        sticker: type === "sticker" ? index : 0, tapeStyle: type === "washi" ? index : 0,
+        sticker: type === "sticker" ? index : 0, stickerPack: type === "sticker" ? pack : 0, tapeStyle: type === "washi" ? index : 0,
         x: 42 + Math.random() * 16, y: 42 + Math.random() * 16,
         size: type === "sticker" ? 90 : 150, rotation: -8 + Math.random() * 16
       };
@@ -413,7 +521,16 @@
         element.style.top = `${Math.max(0, Math.min(100, Number(item.y)))}%`;
         element.style.width = `${Number(item.size) || 90}px`;
         element.style.setProperty("--rotation", `${Number(item.rotation) || 0}deg`);
-        if (item.type === "sticker") setSprite(element, Number(item.sticker) || 0);
+        if (item.type === "sticker") setSprite(element, Number(item.sticker) || 0, Number(item.stickerPack) || 0);
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "decoration-delete";
+        deleteButton.title = "Delete this decoration";
+        deleteButton.setAttribute("aria-label", "Delete selected decoration");
+        deleteButton.textContent = "×";
+        deleteButton.addEventListener("pointerdown", deleteEvent => { deleteEvent.preventDefault(); deleteEvent.stopPropagation(); });
+        deleteButton.addEventListener("click", deleteEvent => { deleteEvent.preventDefault(); deleteEvent.stopPropagation(); removeDecorationById(item.id); });
+        element.appendChild(deleteButton);
         element.addEventListener("pointerdown", event => beginDrag(event, item));
         element.addEventListener("click", event => { event.stopPropagation(); selectDecoration(item.id); });
         (onRight ? right : left).appendChild(element);
@@ -443,6 +560,11 @@
       window.addEventListener("pointercancel", up, { once: true });
     }
     function selectDecoration(id) { selectedDecoration = id; renderDecorations(); }
+    function removeDecorationById(id) {
+      page().decorations = (page().decorations || []).filter(item => item.id !== id);
+      if (selectedDecoration === id) selectedDecoration = null;
+      renderDecorations();
+    }
     function selectedItem() { return (page().decorations || []).find(item => item.id === selectedDecoration); }
     function updateSelectionControls() {
       const item = selectedItem();
@@ -470,6 +592,64 @@
       document.getElementById("nextPage").disabled = model.currentPage >= model.pages.length - 1;
       selectedDecoration = null;
       renderDecorations();
+      if (calendarPanel.classList.contains("open")) renderCalendar();
+      setTimeout(Streamlit.height, 30);
+    }
+    function calendarKey() { return `${calendarCursor.getFullYear()}-${String(calendarCursor.getMonth() + 1).padStart(2, "0")}`; }
+    function dateFromISO(value) {
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+      if (!match) return null;
+      const parsed = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    function renderCalendar() {
+      const year = calendarCursor.getFullYear(), month = calendarCursor.getMonth();
+      document.getElementById("calendarMonthTitle").textContent = calendarCursor.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+      model.monthNotes = model.monthNotes && typeof model.monthNotes === "object" ? model.monthNotes : {};
+      monthNote.value = String(model.monthNotes[calendarKey()] || "");
+      const grid = document.getElementById("calendarGrid");
+      grid.innerHTML = "";
+      const mondayOffset = (new Date(year, month, 1).getDay() + 6) % 7;
+      for (let blank = 0; blank < mondayOffset; blank += 1) {
+        const spacer = document.createElement("div"); spacer.className = "calendar-blank"; grid.appendChild(spacer);
+      }
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const today = localDateISO(new Date());
+      const activeDate = String(page().date || "");
+      for (let day = 1; day <= daysInMonth; day += 1) {
+        const date = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const hasEntry = model.pages.some(entry => String(entry.date || "") === date);
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `calendar-day${hasEntry ? " has-entry" : ""}${date === today ? " today" : ""}${date === activeDate ? " selected" : ""}`;
+        button.textContent = String(day);
+        button.title = hasEntry ? "Open this journal entry" : "Create a journal entry for this date";
+        button.addEventListener("click", () => openCalendarDate(date));
+        grid.appendChild(button);
+      }
+      setTimeout(Streamlit.height, 30);
+    }
+    function openCalendarDate(date) {
+      syncFieldsToModel();
+      let index = model.pages.findIndex(entry => String(entry.date || "") === date);
+      if (index < 0) { model.pages.push(blankPage(date)); index = model.pages.length - 1; }
+      model.currentPage = index;
+      closeCalendar();
+      renderPage();
+    }
+    function openCalendar() {
+      syncFieldsToModel();
+      const currentDate = dateFromISO(page().date) || new Date();
+      calendarCursor = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      calendarPanel.classList.add("open");
+      document.getElementById("toggleCalendar").setAttribute("aria-expanded", "true");
+      document.getElementById("toggleCalendar").textContent = "▦ Calendar open";
+      renderCalendar();
+    }
+    function closeCalendar() {
+      calendarPanel.classList.remove("open");
+      document.getElementById("toggleCalendar").setAttribute("aria-expanded", "false");
+      document.getElementById("toggleCalendar").textContent = "▦ Monthly calendar";
       setTimeout(Streamlit.height, 30);
     }
     function turnPage(direction) {
@@ -491,9 +671,20 @@
     paperPicker.addEventListener("change", () => { page().paper = paperPicker.value; book.className = `book paper-${paperPicker.value}`; });
     sizeSlider.addEventListener("input", () => { const item = selectedItem(); if (item) { item.size = Number(sizeSlider.value); renderDecorations(); } });
     rotationSlider.addEventListener("input", () => { const item = selectedItem(); if (item) { item.rotation = Number(rotationSlider.value); renderDecorations(); } });
-    document.getElementById("removeDecoration").addEventListener("click", () => {
-      page().decorations = (page().decorations || []).filter(item => item.id !== selectedDecoration);
-      selectedDecoration = null; renderDecorations();
+    document.getElementById("removeDecoration").addEventListener("click", () => { if (selectedDecoration) removeDecorationById(selectedDecoration); });
+    document.addEventListener("keydown", event => {
+      const tag = String(document.activeElement && document.activeElement.tagName || "").toLowerCase();
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedDecoration && !["input", "textarea", "select"].includes(tag)) {
+        event.preventDefault(); removeDecorationById(selectedDecoration);
+      }
+    });
+    document.getElementById("toggleCalendar").addEventListener("click", () => calendarPanel.classList.contains("open") ? closeCalendar() : openCalendar());
+    document.getElementById("closeCalendar").addEventListener("click", closeCalendar);
+    document.getElementById("calendarPrevMonth").addEventListener("click", () => { calendarCursor = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() - 1, 1); renderCalendar(); });
+    document.getElementById("calendarNextMonth").addEventListener("click", () => { calendarCursor = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() + 1, 1); renderCalendar(); });
+    monthNote.addEventListener("input", () => {
+      model.monthNotes = model.monthNotes && typeof model.monthNotes === "object" ? model.monthNotes : {};
+      model.monthNotes[calendarKey()] = monthNote.value;
     });
     document.getElementById("prevPage").addEventListener("click", () => turnPage(-1));
     document.getElementById("nextPage").addEventListener("click", () => turnPage(1));
