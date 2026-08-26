@@ -1265,7 +1265,23 @@ def save_current_student_state() -> bool:
         value = st.session_state.get(key)
         # JSON cannot store Python sets; roadmap completion is the only one.
         state[key] = sorted(value) if isinstance(value, set) else value
-    return bool(save_student_state(email, state))
+    # Several Streamlit widgets can trigger the same save during one rerun.
+    # Avoid repeating an identical Supabase request while still saving every
+    # genuinely new quiz answer, roadmap update, journal edit, or chat message.
+    fingerprint_source = json.dumps(
+        {"email": email, "state": state},
+        sort_keys=True,
+        ensure_ascii=False,
+        default=str,
+    )
+    fingerprint = hashlib.sha256(fingerprint_source.encode("utf-8")).hexdigest()
+    if st.session_state.get("_last_saved_state_fingerprint") == fingerprint:
+        return True
+
+    saved = bool(save_student_state(email, state))
+    if saved:
+        st.session_state._last_saved_state_fingerprint = fingerprint
+    return saved
 
 
 def restore_student_state(account: dict[str, object]) -> None:

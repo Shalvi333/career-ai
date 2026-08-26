@@ -5,26 +5,30 @@ import hmac
 import json
 import os
 import secrets
-import ssl
 import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlparse
-from urllib.request import Request, urlopen
+
+import requests
 
 DB_PATH = Path(__file__).parent / "data" / "career_ai_demo.db"
 
 
-def trusted_ssl_context():
-    """Use certifi on macOS/Python installations that lack system certificates."""
+def supabase_http_session() -> requests.Session:
+    """Reuse Supabase HTTPS connections across Streamlit reruns."""
     try:
-        import certifi
+        import streamlit as st
 
-        return ssl.create_default_context(cafile=certifi.where())
+        @st.cache_resource(show_spinner=False)
+        def _cached_session() -> requests.Session:
+            return requests.Session()
+
+        return _cached_session()
     except Exception:
-        return ssl.create_default_context()
+        # The database module can also be used without Streamlit in local tests.
+        return requests.Session()
 
 
 def supabase_config() -> tuple[str, str] | None:
@@ -86,22 +90,21 @@ def _supabase_request(
     if extra_headers:
         headers.update(extra_headers)
 
-    body = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8") if payload is not None else None
-    request = Request(
-        f"{base_url}/rest/v1/{endpoint}",
-        data=body,
-        headers=headers,
-        method=method,
-    )
-
     try:
-        with urlopen(request, timeout=15, context=trusted_ssl_context()) as response:
-            raw = response.read().decode("utf-8")
-            return (json.loads(raw) if raw else None), ""
-    except HTTPError as error:
-        detail = error.read().decode("utf-8", errors="replace")
-        return None, f"Cloud database request failed ({error.code}): {detail}"
-    except (URLError, TimeoutError, OSError):
+        response = supabase_http_session().request(
+            method,
+            f"{base_url}/rest/v1/{endpoint}",
+            json=payload,
+            headers=headers,
+            timeout=(4, 10),
+        )
+        if response.status_code >= 400:
+            return None, (
+                f"Cloud database request failed ({response.status_code}): "
+                f"{response.text}"
+            )
+        return (response.json() if response.content else None), ""
+    except (requests.RequestException, ValueError):
         return None, "Cloud database could not be reached. Please try again."
 
 
