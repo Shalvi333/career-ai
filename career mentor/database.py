@@ -357,6 +357,43 @@ def update_user_password(email: str, current_password: str, new_password: str):
     return True, ""
 
 
+def reset_user_password(email: str, new_password: str):
+    """Replace a password after the caller has verified a recovery code.
+
+    This intentionally does not perform recovery-code validation itself: the
+    application verifies the salted code stored in that student's private
+    state before calling this small database operation.
+    """
+    clean_email = email.strip().lower()
+    new_salt = secrets.token_hex(16)
+    new_hash = hash_password(new_password, new_salt)
+
+    if using_supabase():
+        encoded_email = quote(clean_email, safe="")
+        rows, error = _supabase_request(
+            "GET",
+            f"career_ai_users?email=eq.{encoded_email}&select=email&limit=1",
+        )
+        if error or not rows:
+            return False, "No Career AI account was found for this email."
+        _, error = _supabase_request(
+            "PATCH",
+            f"career_ai_users?email=eq.{encoded_email}",
+            {"password_salt": new_salt, "password_hash": new_hash},
+            {"Prefer": "return=minimal"},
+        )
+        return (not error), ("" if not error else "We could not reset your password right now.")
+
+    with get_connection() as connection:
+        result = connection.execute(
+            "UPDATE users SET password_salt = ?, password_hash = ? WHERE email = ?",
+            (new_salt, new_hash, clean_email),
+        )
+    if result.rowcount < 1:
+        return False, "No Career AI account was found for this email."
+    return True, ""
+
+
 def save_student_state(email: str, state: dict):
     clean_email = email.strip().lower()
     if using_supabase():
@@ -445,7 +482,17 @@ def delete_user(email: str) -> bool:
             f"career_ai_users?email=eq.{quote(clean_email, safe='')}",
             extra_headers={"Prefer": "return=representation"},
         )
-        return not bool(error)
+        if error:
+            return False
+        # Some projects use a cascading foreign key and others do not. This
+        # second request is harmless after a cascade and prevents orphaned
+        # profile state when no cascade was configured.
+        _, state_error = _supabase_request(
+            "DELETE",
+            f"career_ai_states?email=eq.{quote(clean_email, safe='')}",
+            extra_headers={"Prefer": "return=minimal"},
+        )
+        return not bool(state_error)
 
     with get_connection() as connection:
         connection.execute("DELETE FROM student_states WHERE email = ?", (clean_email,))

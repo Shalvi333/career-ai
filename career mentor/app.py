@@ -15,6 +15,7 @@ import json
 import os
 import random
 import re
+import secrets
 import sys
 import time
 from datetime import date, datetime, timedelta, timezone
@@ -40,6 +41,7 @@ from database import (
     initialise_database,
     list_users,
     load_student_state,
+    reset_user_password,
     save_student_state,
     update_user_password,
 )
@@ -1164,7 +1166,7 @@ THEMES = {
 
 
 def init_state() -> None:
-    defaults = {"app_stage":"login", "auth_mode":"login", "light_mode":False, "nav_page":"Dashboard", "student_name":"", "student_email":"", "quiz_name":"", "intake_mode":None, "intake_index":0, "intake_answers":{}, "personality_mode":None, "personality_index":0, "personality_answers":{}, "personality_complete":False, "backend_profile":None, "backend_error":"", "top_matches":[], "career_insights":{}, "score_error":"", "local_roadmap_completed":set(), "mentor_history":[], "career_journal":{"version":1, "currentPage":0, "pages":[]}, "journal_last_save_token":"", "journal_reminder_checked":False, "weekly_goals":[], "weekly_reminder_checked":False, "feedback_entries":[], "accessibility_large_text":False, "accessibility_high_contrast":False, "accessibility_reduce_motion":False}
+    defaults = {"app_stage":"login", "auth_mode":"login", "light_mode":False, "nav_page":"Dashboard", "student_name":"", "student_email":"", "quiz_name":"", "intake_mode":None, "intake_index":0, "intake_answers":{}, "personality_mode":None, "personality_index":0, "personality_answers":{}, "personality_complete":False, "backend_profile":None, "backend_error":"", "top_matches":[], "career_insights":{}, "score_error":"", "local_roadmap_completed":set(), "mentor_history":[], "career_journal":{"version":1, "currentPage":0, "pages":[]}, "journal_last_save_token":"", "journal_reminder_checked":False, "weekly_goals":[], "weekly_reminder_checked":False, "feedback_entries":[], "saved_careers":[], "account_recovery":{}, "auth_recovery_mode":False, "accessibility_large_text":False, "accessibility_high_contrast":False, "accessibility_reduce_motion":False}
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
     # Migrate profiles saved before this page was renamed.
@@ -1234,7 +1236,8 @@ PERSISTED_PROFILE_KEYS = (
     "personality_index", "personality_answers", "personality_complete",
     "top_matches", "career_insights", "score_error", "mentor_history",
     "nav_page", "local_roadmap_completed", "career_journal", "weekly_goals",
-    "feedback_entries", "accessibility_large_text", "accessibility_high_contrast",
+    "feedback_entries", "saved_careers", "account_recovery",
+    "accessibility_large_text", "accessibility_high_contrast",
     "accessibility_reduce_motion",
 )
 
@@ -1271,6 +1274,9 @@ def restore_student_state(account: dict[str, object]) -> None:
     st.session_state.local_roadmap_completed = set(
         st.session_state.get("local_roadmap_completed", [])
     )
+    st.session_state.saved_careers = list(dict.fromkeys(
+        str(title) for title in st.session_state.get("saved_careers", []) if str(title).strip()
+    ))
     # Check once after each fresh login/browser-session restore. This value is
     # deliberately not persisted, so dismissing a reminder never changes the
     # student's journal or permanently disables future reminders.
@@ -3190,6 +3196,66 @@ def render_theme_toggle(show_logout: bool = False) -> None:
                 st.rerun()
 
 
+def create_recovery_code() -> str:
+    """Create a one-time-display recovery code and save only its hash."""
+    code = "-".join(secrets.token_hex(2).upper() for _ in range(3))
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac("sha256", code.encode(), salt.encode(), 120_000).hex()
+    st.session_state.account_recovery = {"salt": salt, "hash": digest}
+    save_current_student_state()
+    return code
+
+
+def recovery_code_matches(email: str, supplied_code: str) -> bool:
+    """Verify a recovery code without storing or comparing plaintext codes."""
+    state = load_student_state(email.strip().lower())
+    recovery = state.get("account_recovery", {})
+    if not isinstance(recovery, dict) or not recovery.get("salt") or not recovery.get("hash"):
+        return False
+    candidate = hashlib.pbkdf2_hmac(
+        "sha256",
+        supplied_code.strip().upper().encode(),
+        str(recovery["salt"]).encode(),
+        120_000,
+    ).hex()
+    return hmac.compare_digest(candidate, str(recovery["hash"]))
+
+
+def render_password_recovery() -> None:
+    """Reset a password with the private recovery code created in the account."""
+    st.markdown("### Recover your account")
+    st.caption("Use the recovery code you saved from Career AI. The code is never emailed or stored in readable form.")
+    with st.form("password_recovery_form", clear_on_submit=False):
+        email = st.text_input("Account email", placeholder="you@example.com")
+        code = st.text_input("Recovery code", placeholder="AB12-CD34-EF56")
+        password = st.text_input("New password", type="password")
+        confirm = st.text_input("Confirm new password", type="password")
+        submitted = st.form_submit_button("Reset password  →", use_container_width=True)
+    if submitted:
+        if not is_valid_email(email):
+            st.error("Please enter the email used for your Career AI account.")
+        elif len(password) < 8:
+            st.error("Your new password must contain at least 8 characters.")
+        elif password != confirm:
+            st.error("The new password and confirmation do not match.")
+        elif not recovery_code_matches(email, code):
+            st.error("That email and recovery code do not match. Sign in and create a new code if you still know your password.")
+        else:
+            updated, error = reset_user_password(email, password)
+            if error:
+                st.error(error)
+            elif updated:
+                # Invalidate the code after a successful reset.
+                state = load_student_state(email)
+                state["account_recovery"] = {}
+                save_student_state(email, state)
+                st.session_state.auth_recovery_mode = False
+                st.success("Password reset. You can now log in with your new password.")
+    if st.button("← Back to log in", key="recovery_back_to_login", use_container_width=True):
+        st.session_state.auth_recovery_mode = False
+        st.rerun()
+
+
 def render_login() -> None:
     render_theme_toggle()
     left, right = st.columns([.92, 1.08], gap="large")
@@ -3199,6 +3265,10 @@ def render_login() -> None:
         heading = "Create your account" if creating_account else "Welcome back"
         subtitle = "Start exploring your future." if creating_account else "Log in to continue your career journey."
         st.markdown(f"<div class='panel'><div class='brand'><div class='brand-name'>Career <span>AI</span></div></div><h1 class='top-title'>{heading}</h1><p class='top-subtitle'>{subtitle}</p>", unsafe_allow_html=True)
+        if st.session_state.get("auth_recovery_mode"):
+            render_password_recovery()
+            st.markdown("</div>", unsafe_allow_html=True)
+            return
         # Forms make the Return/Enter key submit the login or sign-up action.
         with st.form("login_form", clear_on_submit=False, enter_to_submit=True):
             email = st.text_input("Email address", placeholder="you@example.com", key="email_input")
@@ -3240,6 +3310,8 @@ def render_login() -> None:
 
                 if account:
                     restore_student_state(account)
+                    if creating_account:
+                        st.session_state.new_recovery_code = create_recovery_code()
                     # New students choose a quiz. Returning students continue
                     # from the exact page saved before they logged out/closed.
                     st.session_state.app_stage = "welcome" if creating_account else resume_stage()
@@ -3258,6 +3330,9 @@ def render_login() -> None:
         switch_label = "Already have an account? Log in" if creating_account else "New to Career AI? Create an account"
         if st.button(switch_label, use_container_width=True, key="switch_auth_mode"):
             st.session_state.auth_mode = "login" if creating_account else "create"
+            st.rerun()
+        if not creating_account and st.button("Forgot password?", use_container_width=True, key="open_password_recovery"):
+            st.session_state.auth_recovery_mode = True
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
     with right:
@@ -3278,6 +3353,20 @@ def render_login() -> None:
 def render_welcome() -> None:
     render_theme_toggle(show_logout=True)
     st.markdown(f"<div class='top-title'>Hello, {escape(profile_name())}! 👋</div><div class='top-subtitle'>Let’s start by learning what matters to you.</div>", unsafe_allow_html=True)
+    if st.session_state.get("new_recovery_code"):
+        recovery_code = str(st.session_state.new_recovery_code)
+        st.success("Your account is ready. Save this recovery code somewhere private—it is shown only during this session.")
+        st.code(recovery_code, language=None)
+        st.download_button(
+            "Download recovery code",
+            data=("Career AI password recovery code\n" + recovery_code + "\n"),
+            file_name="career-ai-recovery-code.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
+        if st.button("I saved my recovery code", key="dismiss_new_recovery_code", use_container_width=True):
+            st.session_state.pop("new_recovery_code", None)
+            st.rerun()
     st.markdown(f"<div class='panel' style='text-align:center;max-width:900px;margin:0 auto 23px'><div class='butterfly-mark' style='font-size:2.3rem'>🦋</div><h2>“{random.choice(QUOTES)}”</h2><p class='muted'>Choose a quiz length. You can pause and return during this browser session.</p></div>", unsafe_allow_html=True)
     short, long = st.columns(2, gap="large")
     with short:
@@ -4376,6 +4465,23 @@ def collect_admin_feedback(users: list[dict[str, object]]) -> list[dict[str, obj
     return feedback_rows
 
 
+def update_feedback_status(email: str, feedback_id: str, status: str, note: str) -> bool:
+    """Update one concern inside its owner's private saved state."""
+    state = load_student_state(email)
+    entries = state.get("feedback_entries", [])
+    changed = False
+    if not isinstance(entries, list):
+        return False
+    for entry in entries:
+        if isinstance(entry, dict) and str(entry.get("id")) == feedback_id:
+            entry["status"] = status
+            entry["admin_note"] = note.strip()
+            entry["updated_at"] = datetime.now(timezone.utc).isoformat()
+            changed = True
+            break
+    return bool(changed and save_student_state(email, state))
+
+
 def render_admin() -> None:
     """Private account and concern management for the configured administrator."""
     if not is_admin():
@@ -4384,6 +4490,15 @@ def render_admin() -> None:
 
     st.markdown("<div class='top-title'>Admin · Raised concerns</div><div class='top-subtitle'>Review student concerns privately, then manage registered accounts below.</div>", unsafe_allow_html=True)
     users = list_users()
+
+    # Compact, privacy-conscious health overview—no passwords or answer text.
+    states = [load_student_state(str(user.get("email", ""))) for user in users]
+    feedback_snapshot = collect_admin_feedback(users)
+    analytics = st.columns(4)
+    analytics[0].metric("Accounts", len(users))
+    analytics[1].metric("Career profiles", sum(bool(state.get("intake_answers")) for state in states))
+    analytics[2].metric("Completed RIASEC", sum(bool(state.get("personality_complete")) for state in states))
+    analytics[3].metric("Open concerns", sum(str(row.get("status", "Open")) not in {"Resolved", "Closed"} for row in feedback_snapshot))
 
     inbox_title, inbox_action = st.columns([5, 1])
     with inbox_title:
@@ -4427,6 +4542,25 @@ def render_admin() -> None:
                 f"<p>{feedback_text}</p></div>",
                 unsafe_allow_html=True,
             )
+            feedback_id = str(entry.get("id", ""))
+            with st.expander(f"Manage · {entry.get('status', 'Open')}"):
+                with st.form(f"feedback_manage_{entry.get('student_email')}_{feedback_id}"):
+                    status = st.selectbox(
+                        "Status",
+                        ("Open", "Reviewing", "Resolved", "Closed"),
+                        index=("Open", "Reviewing", "Resolved", "Closed").index(
+                            str(entry.get("status", "Open")) if str(entry.get("status", "Open")) in {"Open", "Reviewing", "Resolved", "Closed"} else "Open"
+                        ),
+                    )
+                    note = st.text_area("Private response shown to this student", value=str(entry.get("admin_note", "")))
+                    save_status = st.form_submit_button("Save concern update", use_container_width=True)
+                if save_status:
+                    if update_feedback_status(str(entry.get("student_email", "")), feedback_id, status, note):
+                        st.session_state.pop("admin_feedback_cache", None)
+                        st.success("Concern updated.")
+                        st.rerun()
+                    else:
+                        st.error("The concern could not be updated right now.")
     else:
         st.info("No student concerns have been submitted yet.")
 
@@ -4470,28 +4604,72 @@ def render_admin() -> None:
 
 
 def render_change_password() -> None:
-    """Allow the signed-in student to change only their own password."""
-    st.markdown("<div class='top-title'>Change Password</div><div class='top-subtitle'>Choose a new password for your Career AI account.</div>", unsafe_allow_html=True)
+    """Manage the signed-in student's password, recovery and account."""
+    st.markdown("<div class='top-title'>Account & Password</div><div class='top-subtitle'>Manage your own Career AI account securely.</div>", unsafe_allow_html=True)
+    st.markdown("### Change password")
     with st.form("change_password_form"):
         current_password = st.text_input("Current password", type="password")
         new_password = st.text_input("New password", type="password", help="Use at least 8 characters.")
         confirm_password = st.text_input("Confirm new password", type="password")
         submitted = st.form_submit_button("Update password  →", use_container_width=True)
 
-    if not submitted:
-        return
-    if not current_password or not new_password or not confirm_password:
-        st.error("Please complete all three password fields.")
-    elif len(new_password) < 8:
-        st.error("Your new password must contain at least 8 characters.")
-    elif new_password != confirm_password:
-        st.error("The new password and confirmation do not match.")
-    else:
-        updated, error = update_user_password(st.session_state.student_email, current_password, new_password)
-        if error:
-            st.error(error)
-        elif updated:
-            st.success("Password updated successfully. You can use it the next time you log in.")
+    if submitted:
+        if not current_password or not new_password or not confirm_password:
+            st.error("Please complete all three password fields.")
+        elif len(new_password) < 8:
+            st.error("Your new password must contain at least 8 characters.")
+        elif new_password != confirm_password:
+            st.error("The new password and confirmation do not match.")
+        else:
+            updated, error = update_user_password(st.session_state.student_email, current_password, new_password)
+            if error:
+                st.error(error)
+            elif updated:
+                st.success("Password updated successfully. You can use it the next time you log in.")
+
+    st.markdown("### Password recovery code")
+    st.caption("Generate a new recovery code, save it privately, and use it from ‘Forgot password?’ if you are ever locked out. Creating a new code replaces the old one.")
+    if st.button("Generate a new recovery code", key="generate_account_recovery_code", use_container_width=True):
+        st.session_state.visible_recovery_code = create_recovery_code()
+    if st.session_state.get("visible_recovery_code"):
+        visible_code = str(st.session_state.visible_recovery_code)
+        st.code(visible_code, language=None)
+        st.download_button(
+            "Download recovery code",
+            data=("Career AI password recovery code\n" + visible_code + "\n"),
+            file_name="career-ai-recovery-code.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
+
+    st.markdown("### Delete my account")
+    st.warning("This permanently deletes your login and saved quizzes, results, journal, goals, chats, and feedback. It cannot be undone.")
+    with st.form("self_delete_account_form"):
+        delete_password = st.text_input("Current password", type="password", key="self_delete_password")
+        delete_phrase = st.text_input("Type DELETE to confirm", key="self_delete_phrase")
+        understands = st.checkbox("I understand that all of my Career AI data will be permanently deleted")
+        delete_submitted = st.form_submit_button("Permanently delete my account", use_container_width=True)
+    if delete_submitted:
+        account, auth_error = authenticate_user(st.session_state.student_email, delete_password)
+        if auth_error or not account:
+            st.error("Your current password is incorrect.")
+        elif delete_phrase.strip().upper() != "DELETE" or not understands:
+            st.error("Type DELETE and select the confirmation checkbox before continuing.")
+        else:
+            email_to_delete = str(st.session_state.student_email)
+            if delete_user(email_to_delete):
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
+                st.session_state.app_stage = "login"
+                st.session_state.auth_mode = "login"
+                try:
+                    st.query_params.pop("session", None)
+                except Exception:
+                    pass
+                st.success("Your account and saved Career AI data were deleted.")
+                st.rerun()
+            else:
+                st.error("Your account could not be deleted right now. Please try again.")
 
 
 def json_safe_value(value: object) -> object:
@@ -4640,6 +4818,8 @@ def render_help_privacy() -> None:
                 "category": category,
                 "message": cleaned_message,
                 "contact_ok": bool(contact_ok),
+                "status": "Open",
+                "admin_note": "",
             }
             entries = list(st.session_state.get("feedback_entries", []))
             entries.append(entry)
@@ -4655,10 +4835,13 @@ def render_help_privacy() -> None:
     if entries:
         with st.expander(f"My submitted feedback ({len(entries)})"):
             for entry in reversed(entries[-10:]):
+                admin_note = str(entry.get("admin_note", "")).strip()
+                note_html = f"<p><b>Admin response:</b> {escape(admin_note)}</p>" if admin_note else ""
                 st.markdown(
                     f"<div class='panel'><b>{escape(str(entry.get('category', 'Feedback')))}</b>"
+                    f"<span class='match-pill'>{escape(str(entry.get('status', 'Open')))}</span>"
                     f"<p class='muted'>{escape(str(entry.get('submitted_at', '')))}</p>"
-                    f"<p>{escape(str(entry.get('message', '')))}</p></div>",
+                    f"<p>{escape(str(entry.get('message', '')))}</p>{note_html}</div>",
                     unsafe_allow_html=True,
                 )
 
@@ -4807,6 +4990,19 @@ def render_dashboard() -> None:
             use_container_width=True,
             on_click=open_career_compare,
         )
+        if scored_matches:
+            with st.expander("How were these recommendations calculated?"):
+                written_count = sum(bool(str(value).strip()) for value in st.session_state.get("intake_answers", {}).values())
+                st.write(f"Career AI compared **{written_count} written quiz answers** with the career catalogue.")
+                if st.session_state.get("personality_complete"):
+                    riasec_scores = local_riasec_scores()
+                    strongest = sorted(riasec_scores, key=riasec_scores.get, reverse=True)[:3]
+                    st.write("It also used your strongest RIASEC themes: **" + ", ".join(RIASEC[code][0] for code in strongest) + "**.")
+                else:
+                    st.write("RIASEC has not been included yet; taking it can refine—not replace—your written interests.")
+                for match in scored_matches[:4]:
+                    st.markdown(f"**{escape(match_title(match))}** — {escape(str(match.get('reason') or 'Matches several signals in your current profile.'))}")
+                st.caption("Match percentages show relative fit inside Career AI; they are not probabilities of success or admission.")
     with mentor:
         with st.container(border=True, key="ai_mentor_card"):
             st.markdown("### AI Mentor")
@@ -4943,6 +5139,17 @@ def render_ai_mentor() -> None:
 
 def render_explore_careers() -> None:
     st.markdown("<div class='top-title'>Explore Careers</div><div class='top-subtitle'>Search hundreds of career paths across every major field.</div>", unsafe_allow_html=True)
+    saved_careers = list(st.session_state.get("saved_careers", []))
+    with st.expander(f"★ My saved careers ({len(saved_careers)})", expanded=bool(saved_careers)):
+        if not saved_careers:
+            st.caption("Save interesting careers from any results page to build your shortlist.")
+        else:
+            st.write(" · ".join(saved_careers))
+            remove_saved = st.multiselect("Remove from saved careers", saved_careers, key="remove_saved_careers")
+            if st.button("Remove selected", disabled=not remove_saved, key="remove_saved_careers_button"):
+                st.session_state.saved_careers = [title for title in saved_careers if title not in remove_saved]
+                save_current_student_state()
+                st.rerun()
     st.button(
         "Compare 2–3 careers →",
         key="explore_open_career_compare",
@@ -5023,6 +5230,17 @@ def render_explore_careers() -> None:
             f"<h3>{escape(job)}</h3><p class='muted'>{escape(description)}</p></div>"
         )
     st.markdown("<div class='match-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
+    titles_on_page = [job for job, _ in visible_jobs]
+    add_saved = st.multiselect(
+        "Save careers from this page",
+        [title for title in titles_on_page if title not in saved_careers],
+        key=f"save_careers_{category}_{query}_{page_number}",
+    )
+    if st.button("★ Save selected careers", disabled=not add_saved, use_container_width=True):
+        st.session_state.saved_careers = list(dict.fromkeys([*saved_careers, *add_saved]))
+        save_current_student_state()
+        st.success("Saved to your career shortlist.")
+        st.rerun()
 
 
 def suggested_comparison_careers() -> tuple[str, ...]:
