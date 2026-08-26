@@ -11,6 +11,7 @@ from html import escape
 import base64
 import hashlib
 import hmac
+import importlib.util
 import json
 import os
 import random
@@ -33,18 +34,28 @@ APP_DIRECTORY = Path(__file__).resolve().parent
 if str(APP_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(APP_DIRECTORY))
 
-from database import (
-    authenticate_user,
-    create_user,
-    delete_user,
-    get_user_by_student_id,
-    initialise_database,
-    list_users,
-    load_student_state,
-    reset_user_password,
-    save_student_state,
-    update_user_password,
+# Load this project's database.py by its exact path.  A generic package named
+# ``database`` can otherwise win the import race on some cloud environments.
+DATABASE_MODULE_PATH = APP_DIRECTORY / "database.py"
+database_spec = importlib.util.spec_from_file_location(
+    "career_ai_database",
+    DATABASE_MODULE_PATH,
 )
+if database_spec is None or database_spec.loader is None:
+    raise ImportError(f"Could not load Career AI database module: {DATABASE_MODULE_PATH}")
+database_module = importlib.util.module_from_spec(database_spec)
+database_spec.loader.exec_module(database_module)
+
+authenticate_user = database_module.authenticate_user
+create_user = database_module.create_user
+delete_user = database_module.delete_user
+get_user_by_student_id = database_module.get_user_by_student_id
+initialise_database = database_module.initialise_database
+list_users = database_module.list_users
+load_student_state = database_module.load_student_state
+reset_user_password = database_module.reset_user_password
+save_student_state = database_module.save_student_state
+update_user_password = database_module.update_user_password
 try:
     from report_builder import build_career_report
 except ImportError:
