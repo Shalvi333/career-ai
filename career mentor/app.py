@@ -52,6 +52,7 @@ delete_user = database_module.delete_user
 get_user_by_student_id = database_module.get_user_by_student_id
 initialise_database = database_module.initialise_database
 list_users = database_module.list_users
+list_student_states = database_module.list_student_states
 load_student_state = database_module.load_student_state
 reset_user_password = database_module.reset_user_password
 save_student_state = database_module.save_student_state
@@ -4481,7 +4482,10 @@ def render_sidebar() -> str:
     return page
 
 
-def collect_admin_feedback(users: list[dict[str, object]]) -> list[dict[str, object]]:
+def collect_admin_feedback(
+    users: list[dict[str, object]],
+    states_by_email: dict[str, dict] | None = None,
+) -> list[dict[str, object]]:
     """Collect saved concerns from every account for the protected admin inbox."""
     feedback_rows: list[dict[str, object]] = []
     seen: set[tuple[str, str]] = set()
@@ -4489,7 +4493,11 @@ def collect_admin_feedback(users: list[dict[str, object]]) -> list[dict[str, obj
         email = str(account.get("email", "")).strip().lower()
         if not email:
             continue
-        account_state = load_student_state(email)
+        account_state = (
+            states_by_email.get(email, {})
+            if states_by_email is not None
+            else load_student_state(email)
+        )
         entries = account_state.get("feedback_entries", [])
         if not isinstance(entries, list):
             continue
@@ -4533,16 +4541,6 @@ def render_admin() -> None:
         return
 
     st.markdown("<div class='top-title'>Admin · Raised concerns</div><div class='top-subtitle'>Review student concerns privately, then manage registered accounts below.</div>", unsafe_allow_html=True)
-    users = list_users()
-
-    # Compact, privacy-conscious health overview—no passwords or answer text.
-    states = [load_student_state(str(user.get("email", ""))) for user in users]
-    feedback_snapshot = collect_admin_feedback(users)
-    analytics = st.columns(4)
-    analytics[0].metric("Accounts", len(users))
-    analytics[1].metric("Career profiles", sum(bool(state.get("intake_answers")) for state in states))
-    analytics[2].metric("Completed RIASEC", sum(bool(state.get("personality_complete")) for state in states))
-    analytics[3].metric("Open concerns", sum(str(row.get("status", "Open")) not in {"Resolved", "Closed"} for row in feedback_snapshot))
 
     inbox_title, inbox_action = st.columns([5, 1])
     with inbox_title:
@@ -4550,14 +4548,33 @@ def render_admin() -> None:
         st.caption("Only the configured admin account can view this inbox.")
     with inbox_action:
         refresh_feedback = st.button(
-            "Refresh inbox",
+            "Refresh data",
             use_container_width=True,
             key="admin_refresh_feedback",
         )
 
-    if refresh_feedback or "admin_feedback_cache" not in st.session_state:
-        with st.spinner("Loading concerns from saved student profiles..."):
-            st.session_state.admin_feedback_cache = collect_admin_feedback(users)
+    if refresh_feedback or "admin_users_cache" not in st.session_state:
+        with st.spinner("Loading the latest admin data..."):
+            users = list_users()
+            states_by_email = list_student_states()
+            st.session_state.admin_users_cache = users
+            st.session_state.admin_states_cache = states_by_email
+            st.session_state.admin_feedback_cache = collect_admin_feedback(
+                users,
+                states_by_email,
+            )
+
+    users = list(st.session_state.get("admin_users_cache", []))
+    states_by_email = dict(st.session_state.get("admin_states_cache", {}))
+    states = list(states_by_email.values())
+    feedback_snapshot = list(st.session_state.get("admin_feedback_cache", []))
+
+    # Compact, privacy-conscious health overview—no passwords or answer text.
+    analytics = st.columns(4)
+    analytics[0].metric("Accounts", len(users))
+    analytics[1].metric("Career profiles", sum(bool(state.get("intake_answers")) for state in states))
+    analytics[2].metric("Completed RIASEC", sum(bool(state.get("personality_complete")) for state in states))
+    analytics[3].metric("Open concerns", sum(str(row.get("status", "Open")) not in {"Resolved", "Closed"} for row in feedback_snapshot))
 
     feedback_rows = list(st.session_state.get("admin_feedback_cache", []))
     if feedback_rows:
@@ -4600,6 +4617,8 @@ def render_admin() -> None:
                     save_status = st.form_submit_button("Save concern update", use_container_width=True)
                 if save_status:
                     if update_feedback_status(str(entry.get("student_email", "")), feedback_id, status, note):
+                        st.session_state.pop("admin_users_cache", None)
+                        st.session_state.pop("admin_states_cache", None)
                         st.session_state.pop("admin_feedback_cache", None)
                         st.success("Concern updated.")
                         st.rerun()
@@ -4636,6 +4655,9 @@ def render_admin() -> None:
                     if st.button("Yes", use_container_width=True, key=f"admin_confirm_delete_{user['student_id']}"):
                         delete_user(email)
                         st.session_state.pop("admin_delete_target", None)
+                        st.session_state.pop("admin_users_cache", None)
+                        st.session_state.pop("admin_states_cache", None)
+                        st.session_state.pop("admin_feedback_cache", None)
                         st.success(f"Deleted {email} and its saved data.")
                         st.rerun()
                 with no_col:

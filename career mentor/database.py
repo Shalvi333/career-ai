@@ -476,6 +476,44 @@ def list_users() -> list[dict[str, str]]:
     return [dict(row) for row in rows]
 
 
+def list_student_states() -> dict[str, dict]:
+    """Load all saved student states in one request for the protected admin page."""
+    if using_supabase():
+        rows, error = _supabase_request(
+            "GET",
+            "career_ai_states?select=email,state_json",
+        )
+        if error or not isinstance(rows, list):
+            return {}
+        result: dict[str, dict] = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            email = str(row.get("email", "")).strip().lower()
+            state = row.get("state_json", {})
+            if not isinstance(state, dict):
+                try:
+                    state = json.loads(state)
+                except (TypeError, json.JSONDecodeError):
+                    state = {}
+            if email:
+                result[email] = state
+        return result
+
+    with get_connection() as connection:
+        rows = connection.execute(
+            "SELECT email, state_json FROM student_states"
+        ).fetchall()
+    result: dict[str, dict] = {}
+    for row in rows:
+        try:
+            state = json.loads(row["state_json"])
+        except (TypeError, json.JSONDecodeError):
+            state = {}
+        result[str(row["email"]).strip().lower()] = state
+    return result
+
+
 def delete_user(email: str) -> bool:
     """Permanently delete a user and their saved quiz/profile data."""
     clean_email = email.strip().lower()
