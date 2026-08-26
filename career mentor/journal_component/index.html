@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:wght@500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #49365f;
+      --wine: #8f405d;
+      --rose: #d999a8;
+      --paper: #fffaf0;
+      --edge: #c6a477;
+      --soft-shadow: 0 22px 55px rgba(60, 31, 65, .2);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: #f9f5ff;
+      font-family: "DM Sans", sans-serif;
+      background: transparent;
+      overflow-x: hidden;
+    }
+    button, input, textarea, select { font: inherit; }
+    button { cursor: pointer; }
+    .journal-shell {
+      border: 1px solid rgba(216, 190, 255, .28);
+      border-radius: 28px;
+      padding: 20px;
+      background:
+        radial-gradient(circle at 80% 10%, rgba(240, 132, 156, .16), transparent 27%),
+        linear-gradient(145deg, rgba(38, 22, 76, .97), rgba(17, 10, 42, .98));
+      min-height: 1040px;
+    }
+    .theme-light .journal-shell {
+      color: #2f1c4d;
+      background:
+        radial-gradient(circle at 80% 10%, rgba(240, 132, 156, .14), transparent 27%),
+        linear-gradient(145deg, rgba(255, 255, 255, .98), rgba(240, 234, 255, .98));
+      border-color: rgba(124, 58, 237, .18);
+    }
+    .journal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .journal-header h2 {
+      margin: 0;
+      font-family: "Playfair Display", serif;
+      font-size: clamp(25px, 3vw, 40px);
+    }
+    .journal-header p { margin: 5px 0 0; opacity: .72; }
+    .page-nav { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }
+    .glass-button {
+      border: 1px solid rgba(255,255,255,.28);
+      border-radius: 14px;
+      padding: 10px 15px;
+      color: #fff;
+      font-weight: 700;
+      background: linear-gradient(135deg, rgba(124,58,237,.9), rgba(239,94,125,.9));
+      box-shadow: 0 8px 20px rgba(89, 50, 150, .22);
+      transition: transform .2s ease, filter .2s ease;
+    }
+    .glass-button:hover { transform: translateY(-2px); filter: brightness(1.08); }
+    .glass-button.secondary {
+      background: rgba(255,255,255,.12);
+      box-shadow: none;
+      color: inherit;
+    }
+    .theme-light .glass-button.secondary { background: rgba(87, 53, 138, .08); border-color: rgba(87, 53, 138, .18); }
+    .glass-button:disabled { opacity: .35; cursor: not-allowed; transform: none; }
+    .workspace { display: grid; grid-template-columns: 248px minmax(0, 1fr); gap: 20px; align-items: start; }
+    .toolbox {
+      position: sticky;
+      top: 8px;
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(255,255,255,.08);
+      border-radius: 22px;
+      padding: 16px;
+      max-height: 940px;
+      overflow: auto;
+      scrollbar-width: thin;
+    }
+    .theme-light .toolbox { background: rgba(255,255,255,.72); border-color: rgba(92,54,145,.15); }
+    .tool-section + .tool-section { border-top: 1px dashed rgba(220, 203, 255, .24); margin-top: 16px; padding-top: 16px; }
+    .tool-title { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .12em; opacity: .78; }
+    .field-label { display: block; font-size: 12px; font-weight: 700; margin: 10px 0 5px; opacity: .75; }
+    .tool-select, .tool-color {
+      width: 100%;
+      border: 1px solid rgba(112, 77, 143, .25);
+      border-radius: 11px;
+      padding: 9px;
+      background: rgba(255,255,255,.9);
+      color: #35224c;
+    }
+    .tool-color { height: 42px; padding: 4px; }
+    .sticker-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+    .sticker-choice {
+      aspect-ratio: 5 / 6;
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 10px;
+      background-color: rgba(255,255,255,.85);
+      background-image: url("stickers.png");
+      background-size: 400% 500%;
+      background-repeat: no-repeat;
+      transition: transform .16s ease, box-shadow .16s ease;
+    }
+    .sticker-choice:hover { transform: rotate(-3deg) scale(1.08); box-shadow: 0 6px 14px rgba(45,23,50,.24); }
+    .tape-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .tape-choice { height: 32px; border: 0; border-radius: 5px; box-shadow: 0 3px 8px rgba(35,20,38,.18); }
+    .tape-0 { background: repeating-linear-gradient(45deg,#f9a8b8 0 9px,#ffd4dc 9px 18px); }
+    .tape-1 { background: linear-gradient(90deg,#efb24a,#ffd987); }
+    .tape-2 { background: repeating-linear-gradient(90deg,#a8d5ba 0 13px,#edf5d9 13px 18px); }
+    .tape-3 { background: radial-gradient(circle,#fff 0 2px,transparent 3px),#b99de8; background-size: 15px 15px; }
+    .tape-4 { background: repeating-linear-gradient(-45deg,#ec805f 0 6px,#fff0d6 6px 12px); }
+    .tape-5 { background: linear-gradient(90deg,#8ac6d1,#bce9e8,#8ac6d1); }
+    .tape-6 { background: repeating-linear-gradient(90deg,#bc6b7e 0 4px,#eab4be 4px 8px); }
+    .tape-7 { background: linear-gradient(90deg,#d8c2a4,#f6ead4,#d8c2a4); }
+    .selection-controls { display: none; }
+    .selection-controls.visible { display: block; }
+    input[type="range"] { width: 100%; accent-color: #d76b8d; }
+    .danger-button { width: 100%; border: 1px solid rgba(255,105,130,.35); color: #fff; background: rgba(184,52,78,.5); border-radius: 10px; padding: 9px; margin-top: 9px; }
+    .theme-light .danger-button { color: #7c2942; background: #ffe2e8; }
+
+    .book-stage { min-width: 0; perspective: 1800px; padding: 4px 4px 22px; }
+    .book {
+      position: relative;
+      min-height: 850px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      color: var(--ink);
+      font-family: "DM Sans", sans-serif;
+      filter: drop-shadow(var(--soft-shadow));
+      transform-style: preserve-3d;
+    }
+    .book::before {
+      content: "";
+      position: absolute;
+      z-index: 8;
+      top: 10px;
+      bottom: 10px;
+      left: 50%;
+      width: 24px;
+      transform: translateX(-50%);
+      background: linear-gradient(90deg, rgba(93,62,59,.16), rgba(255,255,255,.7), rgba(75,47,48,.2));
+      opacity: .65;
+      pointer-events: none;
+    }
+    .paper-page {
+      position: relative;
+      min-width: 0;
+      padding: 48px 45px 42px;
+      overflow: hidden;
+      background-color: var(--paper);
+      background-image:
+        repeating-linear-gradient(0deg, transparent 0 34px, rgba(128,98,126,.11) 34px 35px),
+        radial-gradient(circle at 20% 15%, rgba(217,153,168,.09), transparent 28%);
+      border: 1px solid rgba(118,85,71,.22);
+    }
+    .paper-page:first-child { border-radius: 20px 4px 4px 20px; box-shadow: inset -18px 0 28px rgba(71,45,43,.08); }
+    .paper-page:nth-child(2) { border-radius: 4px 20px 20px 4px; box-shadow: inset 18px 0 28px rgba(71,45,43,.08); }
+    .paper-blush .paper-page { --paper: #fff0f1; }
+    .paper-lavender .paper-page { --paper: #f4efff; }
+    .paper-sage .paper-page { --paper: #f0f5e8; }
+    .paper-sky .paper-page { --paper: #edf7fa; }
+    .paper-peach .paper-page { --paper: #fff1df; }
+    .paper-cream .paper-page { --paper: #fffaf0; }
+    .book.flipping-next { animation: turnNext .48s ease both; }
+    .book.flipping-prev { animation: turnPrev .48s ease both; }
+    @keyframes turnNext { 0% { transform: rotateY(0); } 48% { transform: rotateY(-8deg) scale(.985); opacity: .65; } 100% { transform: rotateY(0); opacity: 1; } }
+    @keyframes turnPrev { 0% { transform: rotateY(0); } 48% { transform: rotateY(8deg) scale(.985); opacity: .65; } 100% { transform: rotateY(0); opacity: 1; } }
+    .page-number { position: absolute; bottom: 18px; font-family: "Caveat", cursive; opacity: .55; font-size: 18px; }
+    .left-page .page-number { left: 28px; }
+    .right-page .page-number { right: 28px; }
+    .diary-kicker { font-family: "Caveat", cursive; font-size: 23px; color: #a34e68; }
+    .diary-title {
+      width: 100%; border: 0; border-bottom: 2px solid rgba(132,74,93,.32); background: transparent;
+      color: inherit; font: inherit; font-size: clamp(28px, 4vw, 48px); font-weight: 700; padding: 5px 0 9px; outline: none;
+    }
+    .date-input { border: 0; background: rgba(255,255,255,.45); color: inherit; border-radius: 9px; padding: 8px 10px; margin: 12px 0 21px; }
+    .entry-label { display: block; color: #9c536a; font-weight: 700; margin: 19px 0 7px; position: relative; z-index: 3; }
+    .entry-input, .entry-area {
+      position: relative; z-index: 3; width: 100%; border: 1px solid rgba(128,87,101,.16); border-radius: 12px;
+      background: rgba(255,255,255,.42); color: inherit; padding: 11px 12px; outline: none; resize: vertical; line-height: 1.65;
+    }
+    .entry-area:focus, .entry-input:focus, .diary-title:focus { box-shadow: 0 0 0 3px rgba(220,113,143,.13); }
+    .steps-area { min-height: 210px; }
+    .reflection-area { min-height: 155px; }
+    .next-area { min-height: 100px; }
+    .mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+    .decor-layer { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+    .decoration {
+      position: absolute; pointer-events: auto; touch-action: none; user-select: none; cursor: grab;
+      transform: translate(-50%, -50%) rotate(var(--rotation));
+      filter: drop-shadow(0 5px 7px rgba(55,35,42,.16));
+      transition: filter .15s ease;
+    }
+    .decoration:active { cursor: grabbing; }
+    .decoration.selected { filter: drop-shadow(0 0 0 #fff) drop-shadow(0 0 8px #d75e86); outline: 2px dashed rgba(161,67,99,.6); outline-offset: 4px; }
+    .placed-sticker { aspect-ratio: 5 / 6; background-image: url("stickers.png"); background-size: 400% 500%; background-repeat: no-repeat; }
+    .placed-washi { height: 35px; opacity: .82; clip-path: polygon(2% 4%,98% 0,100% 92%,1% 100%); }
+    .book-hint { text-align: center; opacity: .68; margin: 13px 0 0; font-size: 13px; }
+    .save-row { display: flex; justify-content: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+    .saved-note { opacity: 0; transition: opacity .2s ease; font-weight: 700; color: #83e2bd; align-self: center; }
+    .saved-note.show { opacity: 1; }
+    .empty-note { opacity: .7; font-size: 13px; line-height: 1.5; }
+
+    @media (max-width: 1000px) {
+      .workspace { grid-template-columns: 1fr; }
+      .toolbox { position: relative; max-height: none; }
+      .sticker-grid { grid-template-columns: repeat(10, minmax(38px, 1fr)); }
+      .tape-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+    @media (max-width: 760px) {
+      .journal-shell { padding: 12px; border-radius: 19px; }
+      .journal-header { align-items: flex-start; flex-direction: column; }
+      .page-nav { justify-content: flex-start; }
+      .sticker-grid { grid-template-columns: repeat(5, 1fr); }
+      .book { display: block; min-height: 0; }
+      .book::before { display: none; }
+      .paper-page { min-height: 650px; padding: 36px 25px 42px; }
+      .paper-page:first-child { border-radius: 18px 18px 4px 4px; box-shadow: inset 0 -15px 25px rgba(71,45,43,.05); }
+      .paper-page:nth-child(2) { border-radius: 4px 4px 18px 18px; box-shadow: inset 0 15px 25px rgba(71,45,43,.05); }
+      .mini-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="journal-shell">
+    <header class="journal-header">
+      <div>
+        <h2>My little steps journal ✿</h2>
+        <p id="welcomeCopy">A scrapbook for the future you are building.</p>
+      </div>
+      <div class="page-nav">
+        <button class="glass-button secondary" id="prevPage" aria-label="Previous journal page">← Previous</button>
+        <strong id="pageCounter">Page 1 of 1</strong>
+        <button class="glass-button secondary" id="nextPage" aria-label="Next journal page">Next →</button>
+        <button class="glass-button" id="newPage">＋ New day</button>
+      </div>
+    </header>
+
+    <section class="workspace">
+      <aside class="toolbox">
+        <div class="tool-section">
+          <h3 class="tool-title">Your page style</h3>
+          <label class="field-label" for="fontPicker">Handwriting / font</label>
+          <select class="tool-select" id="fontPicker">
+            <option>DM Sans</option><option>Caveat</option><option>Lora</option><option>Playfair Display</option><option>Quicksand</option>
+          </select>
+          <label class="field-label" for="colorPicker">Writing colour</label>
+          <input class="tool-color" id="colorPicker" type="color" value="#49365f" />
+          <label class="field-label" for="paperPicker">Paper colour</label>
+          <select class="tool-select" id="paperPicker">
+            <option value="cream">Vanilla cream</option><option value="blush">Blush pink</option><option value="lavender">Soft lavender</option>
+            <option value="sage">Sage green</option><option value="sky">Powder blue</option><option value="peach">Peach glow</option>
+          </select>
+        </div>
+
+        <div class="tool-section">
+          <h3 class="tool-title">Sticker drawer</h3>
+          <div class="sticker-grid" id="stickerGrid" aria-label="Add a sticker"></div>
+          <p class="empty-note">Tap to add. Then drag it anywhere on the open diary.</p>
+        </div>
+
+        <div class="tool-section">
+          <h3 class="tool-title">Washi tape</h3>
+          <div class="tape-grid" id="tapeGrid" aria-label="Add washi tape"></div>
+        </div>
+
+        <div class="tool-section selection-controls" id="selectionControls">
+          <h3 class="tool-title">Selected decoration</h3>
+          <label class="field-label" for="sizeSlider">Size</label>
+          <input id="sizeSlider" type="range" min="30" max="240" value="90" />
+          <label class="field-label" for="rotationSlider">Tilt</label>
+          <input id="rotationSlider" type="range" min="-180" max="180" value="0" />
+          <button class="danger-button" id="removeDecoration">Remove selected</button>
+        </div>
+
+        <div class="tool-section">
+          <button class="danger-button" id="deletePage">Delete this journal page</button>
+        </div>
+      </aside>
+
+      <div class="book-stage">
+        <div class="book paper-cream" id="book">
+          <section class="paper-page left-page">
+            <div class="decor-layer" id="leftDecor"></div>
+            <div class="diary-kicker">Today I moved one step closer…</div>
+            <input class="diary-title page-field" data-field="title" maxlength="100" placeholder="Give today a title" />
+            <input class="date-input page-field" data-field="date" type="date" />
+            <label class="entry-label">My career focus today</label>
+            <input class="entry-input page-field" data-field="goal" maxlength="500" placeholder="What did you want to explore, practise or finish?" />
+            <label class="entry-label">Steps I took</label>
+            <textarea class="entry-area steps-area page-field" data-field="steps" maxlength="3000" placeholder="A course lesson, conversation, sketch, practice session, application, article, experiment… every small step counts."></textarea>
+            <label class="entry-label">A small win worth remembering</label>
+            <textarea class="entry-area page-field" data-field="win" maxlength="800" placeholder="What are you proud of today?"></textarea>
+            <span class="page-number" id="leftPageNumber">1</span>
+          </section>
+
+          <section class="paper-page right-page">
+            <div class="decor-layer" id="rightDecor"></div>
+            <div class="mini-grid">
+              <div><label class="entry-label">Mood</label><input class="entry-input page-field" data-field="mood" maxlength="40" placeholder="curious ✦" /></div>
+              <div><label class="entry-label">One word for today</label><input class="entry-input page-field" data-field="dayWord" maxlength="40" placeholder="growing" /></div>
+            </div>
+            <label class="entry-label">What I noticed about myself</label>
+            <textarea class="entry-area reflection-area page-field" data-field="reflection" maxlength="2000" placeholder="What felt exciting? What was difficult? Which strengths did you use?"></textarea>
+            <label class="entry-label">My next tiny step</label>
+            <textarea class="entry-area next-area page-field" data-field="nextStep" maxlength="1000" placeholder="Keep it realistic enough to begin tomorrow."></textarea>
+            <label class="entry-label">A note to future me</label>
+            <textarea class="entry-area reflection-area page-field" data-field="futureNote" maxlength="1000" placeholder="You do not need the whole path today. Just the next honest step."></textarea>
+            <span class="page-number" id="rightPageNumber">2</span>
+          </section>
+        </div>
+        <p class="book-hint">Drag decorations across either page · select one to resize or rotate · your writing saves only when you press the button below.</p>
+        <div class="save-row">
+          <button class="glass-button" id="saveJournal">Save journal to my account ✦</button>
+          <button class="glass-button secondary" id="exportJournal">Download backup</button>
+          <span class="saved-note" id="savedNote">Saved!</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const Streamlit = {
+      ready() { window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:componentReady", apiVersion: 1 }, "*"); },
+      height() { window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setFrameHeight", height: Math.max(1080, document.documentElement.scrollHeight + 12) }, "*"); },
+      value(value) { window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setComponentValue", value, dataType: "json" }, "*"); }
+    };
+
+    const blankPage = () => ({
+      id: `page-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      date: new Date().toISOString().slice(0, 10), title: "", goal: "", steps: "", win: "", reflection: "", nextStep: "", mood: "", dayWord: "", futureNote: "",
+      font: "DM Sans", color: "#49365f", paper: "cream", decorations: []
+    });
+    let model = { version: 1, currentPage: 0, pages: [blankPage()] };
+    let selectedDecoration = null;
+    let renderedOnce = false;
+    let isAnimating = false;
+
+    const book = document.getElementById("book");
+    const pageFields = [...document.querySelectorAll(".page-field")];
+    const fontPicker = document.getElementById("fontPicker");
+    const colorPicker = document.getElementById("colorPicker");
+    const paperPicker = document.getElementById("paperPicker");
+    const selectionControls = document.getElementById("selectionControls");
+    const sizeSlider = document.getElementById("sizeSlider");
+    const rotationSlider = document.getElementById("rotationSlider");
+
+    function safeModel(incoming) {
+      if (!incoming || typeof incoming !== "object") return { version: 1, currentPage: 0, pages: [blankPage()] };
+      const pages = Array.isArray(incoming.pages) && incoming.pages.length ? incoming.pages : [blankPage()];
+      return { version: 1, currentPage: Math.max(0, Math.min(Number(incoming.currentPage) || 0, pages.length - 1)), pages };
+    }
+    function page() { return model.pages[model.currentPage]; }
+    function spritePosition(index) {
+      const col = index % 4, row = Math.floor(index / 4);
+      return `${col * (100 / 3)}% ${row * 25}%`;
+    }
+    function setSprite(element, index) { element.style.backgroundPosition = spritePosition(index); }
+    function buildPalettes() {
+      const grid = document.getElementById("stickerGrid");
+      grid.innerHTML = "";
+      for (let index = 0; index < 20; index += 1) {
+        const button = document.createElement("button");
+        button.className = "sticker-choice";
+        button.type = "button";
+        button.title = "Add sticker";
+        setSprite(button, index);
+        button.addEventListener("click", () => addDecoration("sticker", index));
+        grid.appendChild(button);
+      }
+      const tapeGrid = document.getElementById("tapeGrid");
+      tapeGrid.innerHTML = "";
+      for (let index = 0; index < 8; index += 1) {
+        const button = document.createElement("button");
+        button.className = `tape-choice tape-${index}`;
+        button.type = "button";
+        button.title = "Add washi tape";
+        button.addEventListener("click", () => addDecoration("washi", index));
+        tapeGrid.appendChild(button);
+      }
+    }
+    function addDecoration(type, index) {
+      const decoration = {
+        id: `decor-${Date.now()}-${Math.random().toString(16).slice(2)}`, type,
+        sticker: type === "sticker" ? index : 0, tapeStyle: type === "washi" ? index : 0,
+        x: 42 + Math.random() * 16, y: 42 + Math.random() * 16,
+        size: type === "sticker" ? 90 : 150, rotation: -8 + Math.random() * 16
+      };
+      page().decorations = Array.isArray(page().decorations) ? page().decorations : [];
+      page().decorations.push(decoration);
+      selectedDecoration = decoration.id;
+      renderDecorations();
+    }
+    function renderDecorations() {
+      const left = document.getElementById("leftDecor"), right = document.getElementById("rightDecor");
+      left.innerHTML = ""; right.innerHTML = "";
+      const decorations = Array.isArray(page().decorations) ? page().decorations : [];
+      decorations.forEach(item => {
+        const element = document.createElement("div");
+        const onRight = Number(item.x) >= 50;
+        element.className = `decoration ${item.type === "washi" ? `placed-washi tape-${item.tapeStyle || 0}` : "placed-sticker"}${selectedDecoration === item.id ? " selected" : ""}`;
+        element.dataset.id = item.id;
+        const localX = onRight ? (Number(item.x) - 50) * 2 : Number(item.x) * 2;
+        element.style.left = `${Math.max(0, Math.min(100, localX))}%`;
+        element.style.top = `${Math.max(0, Math.min(100, Number(item.y)))}%`;
+        element.style.width = `${Number(item.size) || 90}px`;
+        element.style.setProperty("--rotation", `${Number(item.rotation) || 0}deg`);
+        if (item.type === "sticker") setSprite(element, Number(item.sticker) || 0);
+        element.addEventListener("pointerdown", event => beginDrag(event, item));
+        element.addEventListener("click", event => { event.stopPropagation(); selectDecoration(item.id); });
+        (onRight ? right : left).appendChild(element);
+      });
+      updateSelectionControls();
+    }
+    function beginDrag(event, item) {
+      event.preventDefault();
+      event.stopPropagation();
+      selectedDecoration = item.id;
+      renderDecorations();
+      const startX = event.clientX, startY = event.clientY;
+      const startItemX = Number(item.x), startItemY = Number(item.y);
+      const spread = book.getBoundingClientRect();
+      const move = moveEvent => {
+        item.x = Math.max(1, Math.min(99, startItemX + ((moveEvent.clientX - startX) / spread.width) * 100));
+        item.y = Math.max(1, Math.min(99, startItemY + ((moveEvent.clientY - startY) / spread.height) * 100));
+        renderDecorations();
+      };
+      const up = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        window.removeEventListener("pointercancel", up);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up, { once: true });
+      window.addEventListener("pointercancel", up, { once: true });
+    }
+    function selectDecoration(id) { selectedDecoration = id; renderDecorations(); }
+    function selectedItem() { return (page().decorations || []).find(item => item.id === selectedDecoration); }
+    function updateSelectionControls() {
+      const item = selectedItem();
+      selectionControls.classList.toggle("visible", Boolean(item));
+      if (item) { sizeSlider.value = Number(item.size) || 90; rotationSlider.value = Number(item.rotation) || 0; }
+    }
+    function syncFieldsToModel() {
+      pageFields.forEach(field => { page()[field.dataset.field] = field.value; });
+      page().font = fontPicker.value; page().color = colorPicker.value; page().paper = paperPicker.value;
+      model.currentPage = Math.max(0, Math.min(model.currentPage, model.pages.length - 1));
+    }
+    function renderPage() {
+      const current = page();
+      pageFields.forEach(field => { field.value = current[field.dataset.field] || ""; });
+      fontPicker.value = current.font || "DM Sans";
+      colorPicker.value = current.color || "#49365f";
+      paperPicker.value = current.paper || "cream";
+      book.className = `book paper-${paperPicker.value}`;
+      book.style.fontFamily = `"${fontPicker.value}", sans-serif`;
+      book.style.color = colorPicker.value;
+      document.getElementById("pageCounter").textContent = `Day ${model.currentPage + 1} of ${model.pages.length}`;
+      document.getElementById("leftPageNumber").textContent = model.currentPage * 2 + 1;
+      document.getElementById("rightPageNumber").textContent = model.currentPage * 2 + 2;
+      document.getElementById("prevPage").disabled = model.currentPage === 0;
+      document.getElementById("nextPage").disabled = model.currentPage >= model.pages.length - 1;
+      selectedDecoration = null;
+      renderDecorations();
+      setTimeout(Streamlit.height, 30);
+    }
+    function turnPage(direction) {
+      if (isAnimating) return;
+      const nextIndex = model.currentPage + direction;
+      if (nextIndex < 0 || nextIndex >= model.pages.length) return;
+      syncFieldsToModel();
+      isAnimating = true;
+      book.classList.add(direction > 0 ? "flipping-next" : "flipping-prev");
+      setTimeout(() => {
+        model.currentPage = nextIndex;
+        renderPage();
+        isAnimating = false;
+      }, 260);
+    }
+    pageFields.forEach(field => field.addEventListener("input", () => { page()[field.dataset.field] = field.value; }));
+    fontPicker.addEventListener("change", () => { page().font = fontPicker.value; book.style.fontFamily = `"${fontPicker.value}", sans-serif`; });
+    colorPicker.addEventListener("input", () => { page().color = colorPicker.value; book.style.color = colorPicker.value; });
+    paperPicker.addEventListener("change", () => { page().paper = paperPicker.value; book.className = `book paper-${paperPicker.value}`; });
+    sizeSlider.addEventListener("input", () => { const item = selectedItem(); if (item) { item.size = Number(sizeSlider.value); renderDecorations(); } });
+    rotationSlider.addEventListener("input", () => { const item = selectedItem(); if (item) { item.rotation = Number(rotationSlider.value); renderDecorations(); } });
+    document.getElementById("removeDecoration").addEventListener("click", () => {
+      page().decorations = (page().decorations || []).filter(item => item.id !== selectedDecoration);
+      selectedDecoration = null; renderDecorations();
+    });
+    document.getElementById("prevPage").addEventListener("click", () => turnPage(-1));
+    document.getElementById("nextPage").addEventListener("click", () => turnPage(1));
+    document.getElementById("newPage").addEventListener("click", () => {
+      syncFieldsToModel(); model.pages.push(blankPage()); model.currentPage = model.pages.length - 1; renderPage();
+    });
+    document.getElementById("deletePage").addEventListener("click", () => {
+      if (!window.confirm("Delete this journal day? This change becomes permanent after you save.")) return;
+      if (model.pages.length === 1) model.pages = [blankPage()];
+      else model.pages.splice(model.currentPage, 1);
+      model.currentPage = Math.max(0, Math.min(model.currentPage, model.pages.length - 1)); renderPage();
+    });
+    document.getElementById("saveJournal").addEventListener("click", () => {
+      syncFieldsToModel();
+      const token = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      Streamlit.value({ action: "save", token, journal: model });
+      const note = document.getElementById("savedNote"); note.classList.add("show"); setTimeout(() => note.classList.remove("show"), 1800);
+    });
+    document.getElementById("exportJournal").addEventListener("click", () => {
+      syncFieldsToModel();
+      const blob = new Blob([JSON.stringify(model, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob), link = document.createElement("a");
+      link.href = url; link.download = "career-ai-journal.json"; link.click(); URL.revokeObjectURL(url);
+    });
+
+    window.addEventListener("message", event => {
+      const message = event.data;
+      if (!message || message.type !== "streamlit:render") return;
+      document.body.classList.toggle("theme-light", Boolean(message.args && message.args.light_mode));
+      const name = String((message.args && message.args.student_name) || "").trim();
+      document.getElementById("welcomeCopy").textContent = `${name ? `${name}, this is` : "This is"} a scrapbook for the future you are building.`;
+      if (!renderedOnce) {
+        model = safeModel(message.args && message.args.journal);
+        renderedOnce = true;
+        renderPage();
+      }
+      Streamlit.height();
+    });
+    window.addEventListener("resize", Streamlit.height);
+    buildPalettes();
+    renderPage();
+    Streamlit.ready();
+    Streamlit.height();
+  </script>
+</body>
+</html>
