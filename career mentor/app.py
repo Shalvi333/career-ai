@@ -99,81 +99,105 @@ QUOTES = (
     "Your interests are clues, not limits.",
 )
 
-# A lightweight game that helps students discover what different careers
-# actually do. Five questions are selected for each round so replaying stays
-# fresh without affecting the student's real quiz results.
+# A lightweight game that helps students distinguish between careers with
+# overlapping skills. Ten questions are selected for each round; the answer
+# positions are balanced and shuffled without affecting real quiz results.
 CAREER_GAME_QUESTIONS = (
     {
-        "clue": "I study how people use apps, test layouts, and improve confusing screens. Who am I?",
-        "options": ("UX Designer", "Accountant", "Civil Engineer", "Pharmacist"),
+        "clue": "A banking app loses users during registration. I run usability sessions, map the user journey, and redesign the interaction flow—not the visual brand. Which role best fits?",
+        "options": ("UX Designer", "UX Researcher", "Graphic Designer", "Product Manager"),
         "answer": "UX Designer",
-        "explanation": "UX designers research users and improve how digital products feel and function.",
+        "explanation": "UX designers translate user evidence into interaction flows, information architecture, wireframes, and usable product experiences.",
     },
     {
-        "clue": "I examine habitats, track animals, and use field research to protect species. Who am I?",
-        "options": ("Wildlife Biologist", "Journalist", "Architect", "Financial Analyst"),
+        "clue": "I estimate an endangered cat population from camera-trap captures, study habitat use, and advise a conservation programme. Which specialist am I?",
+        "options": ("Wildlife Biologist", "Veterinary Pathologist", "Environmental Engineer", "Agricultural Scientist"),
         "answer": "Wildlife Biologist",
-        "explanation": "Wildlife biologists study animals, ecosystems, and the effects of environmental change.",
+        "explanation": "Wildlife biologists use field observations and population methods to study free-living animals and their habitats.",
     },
     {
-        "clue": "I turn tables of numbers into patterns, charts, and useful business decisions. Who am I?",
-        "options": ("Data Analyst", "Chef", "Music Teacher", "Physiotherapist"),
+        "clue": "A retailer wants to know why repeat purchases fell. I clean transaction data, test patterns, build a dashboard, and explain the evidence to decision-makers. Which role is this?",
+        "options": ("Data Analyst", "Data Engineer", "Actuary", "Operations Research Analyst"),
         "answer": "Data Analyst",
-        "explanation": "Data analysts clean, explore, and communicate data so people can make informed decisions.",
+        "explanation": "Data analysts examine existing data and communicate findings; data engineers primarily build the pipelines that supply it.",
     },
     {
-        "clue": "I help people recover movement and strength after an injury or operation. Who am I?",
-        "options": ("Physiotherapist", "Animator", "Lawyer", "Astronomer"),
+        "clue": "After knee surgery, I measure joint movement, prescribe progressive exercises, and retrain walking mechanics. Which professional leads this physical rehabilitation?",
+        "options": ("Physiotherapist", "Occupational Therapist", "Orthopaedic Surgeon", "Sports Psychologist"),
         "answer": "Physiotherapist",
-        "explanation": "Physiotherapists assess movement and guide exercises that support recovery and mobility.",
+        "explanation": "Physiotherapists restore movement and physical function; occupational therapists focus more on independence in daily activities.",
     },
     {
-        "clue": "I plan safe and useful buildings by combining creativity, measurements, and construction knowledge. Who am I?",
-        "options": ("Architect", "Marine Biologist", "Cricketer", "Psychologist"),
+        "clue": "For a new public library, I coordinate spatial planning, circulation, accessibility, materials, and the overall building concept while engineers verify structural systems. Who am I?",
+        "options": ("Architect", "Structural Engineer", "Urban Planner", "Quantity Surveyor"),
         "answer": "Architect",
-        "explanation": "Architects design buildings while balancing appearance, safety, space, and practical needs.",
+        "explanation": "Architects integrate human needs, space, regulations, and design intent while coordinating specialist engineers.",
     },
     {
-        "clue": "I design menus, manage a kitchen, and combine ingredients, timing, and presentation. Who am I?",
-        "options": ("Chef", "Cybersecurity Analyst", "Geologist", "Product Manager"),
-        "answer": "Chef",
-        "explanation": "Chefs use culinary technique, creativity, teamwork, and time management to create food experiences.",
+        "clue": "I create a seasonal menu, cost dishes, supervise kitchen stations, and make the final call on flavour and service consistency. Which role best fits?",
+        "options": ("Executive Chef", "Food Technologist", "Restaurant Manager", "Dietitian"),
+        "answer": "Executive Chef",
+        "explanation": "An executive chef leads culinary production and menu quality; a restaurant manager oversees the wider business and guest operations.",
     },
     {
-        "clue": "I investigate stories, interview people, verify facts, and explain events to the public. Who am I?",
-        "options": ("Journalist", "Dentist", "Game Developer", "Pilot"),
-        "answer": "Journalist",
-        "explanation": "Journalists research and verify information before communicating it through print, video, audio, or digital media.",
+        "clue": "I compare leaked records with public documents, interview several sources, and give the subjects a chance to respond before publication. Which role is most precise?",
+        "options": ("Investigative Journalist", "Public Relations Specialist", "Policy Analyst", "Copy Editor"),
+        "answer": "Investigative Journalist",
+        "explanation": "Investigative journalists build evidence-based public-interest stories through documents, sources, verification, and fair-response practices.",
     },
     {
-        "clue": "I look for suspicious activity in computer systems and help protect information from attacks. Who am I?",
-        "options": ("Cybersecurity Analyst", "Fashion Designer", "Veterinarian", "Sports Coach"),
+        "clue": "An alert shows unusual logins and data transfers. I examine logs, contain the affected machine, preserve evidence, and help close the security gap. Which role am I performing?",
+        "options": ("Cybersecurity Analyst", "Network Architect", "Software Tester", "Database Administrator"),
         "answer": "Cybersecurity Analyst",
-        "explanation": "Cybersecurity analysts monitor risks, investigate threats, and strengthen digital defenses.",
+        "explanation": "Cybersecurity analysts investigate security events and coordinate containment, recovery, and prevention.",
     },
     {
-        "clue": "I study pollution, climate, soil, or water and help develop solutions for the planet. Who am I?",
-        "options": ("Environmental Scientist", "Investment Banker", "Actor", "Interior Designer"),
+        "clue": "Residents report polluted groundwater near an industrial site. I design sampling, interpret laboratory results, trace likely sources, and prepare a remediation assessment. Who am I?",
+        "options": ("Environmental Scientist", "Chemical Engineer", "Hydrologist", "Urban Planner"),
         "answer": "Environmental Scientist",
-        "explanation": "Environmental scientists collect evidence and solve problems involving natural resources and human impact.",
+        "explanation": "Environmental scientists connect field sampling, laboratory evidence, regulations, and human impacts to assess environmental problems.",
     },
     {
-        "clue": "I make characters and objects appear to move for films, games, advertisements, or learning videos. Who am I?",
-        "options": ("Animator", "Surgeon", "Economist", "Electrician"),
-        "answer": "Animator",
-        "explanation": "Animators combine art, storytelling, timing, and software to create movement frame by frame.",
+        "clue": "Using a rig supplied by another artist, I refine poses, timing, weight, and facial performance so a digital character appears alive. Which role fits best?",
+        "options": ("3D Animator", "3D Modeller", "VFX Compositor", "Storyboard Artist"),
+        "answer": "3D Animator",
+        "explanation": "3D animators create performance through posing and timing; modellers build forms and compositors combine final visual layers.",
     },
     {
-        "clue": "I plan practice sessions, study performance, and help athletes improve their technique and teamwork. Who am I?",
-        "options": ("Sports Coach", "Chemist", "Web Developer", "Librarian"),
+        "clue": "I analyse match footage, design tactical drills, select team combinations, and give technical feedback before the next fixture. Which role is this?",
+        "options": ("Sports Coach", "Sports Physiotherapist", "Performance Analyst", "Sports Agent"),
         "answer": "Sports Coach",
-        "explanation": "Sports coaches teach technique, build strategies, motivate athletes, and monitor development.",
+        "explanation": "A sports coach owns player development and tactical preparation, often using analysis supplied by specialist performance analysts.",
     },
     {
-        "clue": "I use physics, mathematics, and engineering to work on aircraft, spacecraft, or flight systems. Who am I?",
-        "options": ("Aerospace Engineer", "Clinical Psychologist", "Photographer", "Human Resources Manager"),
+        "clue": "I model airflow over a wing, evaluate stability, and test whether a design meets performance and safety requirements. Which engineer is most directly responsible?",
+        "options": ("Aerospace Engineer", "Mechanical Engineer", "Avionics Technician", "Air Traffic Controller"),
         "answer": "Aerospace Engineer",
-        "explanation": "Aerospace engineers design and test systems that operate in the atmosphere or space.",
+        "explanation": "Aerospace engineers specialise in flight vehicles and apply aerodynamics, structures, propulsion, controls, and testing.",
+    },
+    {
+        "clue": "I use mortality tables, probability models, and financial assumptions to estimate the long-term cost of insurance promises. Which profession is this?",
+        "options": ("Actuary", "Financial Analyst", "Statistician", "Insurance Underwriter"),
+        "answer": "Actuary",
+        "explanation": "Actuaries quantify long-term financial risk using probability, statistics, finance, and professional judgement.",
+    },
+    {
+        "clue": "I sketch and prototype a handheld medical device, balancing ergonomics, manufacture, appearance, and how a person physically uses it. Who am I?",
+        "options": ("Industrial Designer", "Biomedical Engineer", "Mechanical Engineer", "Graphic Designer"),
+        "answer": "Industrial Designer",
+        "explanation": "Industrial designers shape the form and user interaction of physical products while collaborating with engineers on technical feasibility.",
+    },
+    {
+        "clue": "A family may carry an inherited condition. I explain test options and probabilities, explore their concerns, and support an informed decision without choosing for them. Who am I?",
+        "options": ("Genetic Counsellor", "Clinical Geneticist", "Laboratory Technologist", "Clinical Psychologist"),
+        "answer": "Genetic Counsellor",
+        "explanation": "Genetic counsellors combine genetics knowledge with counselling to support informed, values-based decisions.",
+    },
+    {
+        "clue": "After a stroke, I assess language comprehension, speech production, and swallowing, then design targeted therapy. Which specialist am I?",
+        "options": ("Speech-Language Pathologist", "Occupational Therapist", "Audiologist", "Neurologist"),
+        "answer": "Speech-Language Pathologist",
+        "explanation": "Speech-language pathologists assess and treat communication and swallowing disorders across the lifespan.",
     },
 )
 
@@ -3096,9 +3120,23 @@ def render_personality_results() -> None:
 
 
 def start_career_game() -> None:
-    """Create a fresh five-question Career Quest round."""
-    question_count = min(5, len(CAREER_GAME_QUESTIONS))
-    st.session_state.career_game_order = random.sample(range(len(CAREER_GAME_QUESTIONS)), question_count)
+    """Create a fresh ten-question round with balanced answer positions."""
+    question_count = min(10, len(CAREER_GAME_QUESTIONS))
+    order = random.sample(range(len(CAREER_GAME_QUESTIONS)), question_count)
+    # Spread correct answers across A/B/C/D, then shuffle that position plan.
+    # This prevents a round from accidentally placing every answer first.
+    answer_slots = [position % 4 for position in range(question_count)]
+    random.shuffle(answer_slots)
+    option_orders = {}
+    for round_position, question_index in enumerate(order):
+        question = CAREER_GAME_QUESTIONS[question_index]
+        distractors = [option for option in question["options"] if option != question["answer"]]
+        random.shuffle(distractors)
+        shuffled_options = distractors
+        shuffled_options.insert(answer_slots[round_position], question["answer"])
+        option_orders[str(question_index)] = tuple(shuffled_options)
+    st.session_state.career_game_order = order
+    st.session_state.career_game_option_orders = option_orders
     st.session_state.career_game_index = 0
     st.session_state.career_game_score = 0
     st.session_state.career_game_answered = False
@@ -3111,9 +3149,17 @@ def start_career_game() -> None:
 def render_career_game() -> None:
     """Render a small, replayable career-clue guessing game."""
     order = st.session_state.get("career_game_order")
-    if not isinstance(order, list) or not order or any(not isinstance(item, int) or item >= len(CAREER_GAME_QUESTIONS) for item in order):
+    option_orders = st.session_state.get("career_game_option_orders")
+    if (
+        not isinstance(order, list)
+        or not order
+        or any(not isinstance(item, int) or item >= len(CAREER_GAME_QUESTIONS) for item in order)
+        or not isinstance(option_orders, dict)
+        or any(str(item) not in option_orders for item in order)
+    ):
         start_career_game()
         order = st.session_state.career_game_order
+        option_orders = st.session_state.career_game_option_orders
 
     st.markdown(
         "<div class='top-title'>🎮 Career Quest</div>"
@@ -3165,7 +3211,7 @@ def render_career_game() -> None:
     st.progress(progress)
     choice = st.radio(
         "Choose your answer",
-        question["options"],
+        option_orders[str(order[index])],
         index=None,
         key=f"career_game_choice_{st.session_state.career_game_round}_{index}",
         disabled=answered,
