@@ -17,7 +17,7 @@ import random
 import re
 import sys
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -84,8 +84,8 @@ career_journal_component = components.declare_component(
 )
 initialise_database()
 
-PAGES = ("Dashboard", "Explore Careers", "Career Compare", "Opportunity Board", "Career Quest", "Career Journal", "Weekly Planner", "Skill Roadmap", "Scholarships", "Universities", "Career Report", "AI Mentor", "Change Password")
-PAGE_ICONS = {"Dashboard": "⌂", "Explore Careers": "⌕", "Career Compare": "⇄", "Opportunity Board": "✦", "Career Quest": "🎮", "Career Journal": "📔", "Weekly Planner": "✓", "Skill Roadmap": "↗", "Scholarships": "🦋", "Universities": "♜", "Career Report": "↓", "AI Mentor": "🦋", "Change Password": "🔒", "Admin": "⚙"}
+PAGES = ("Dashboard", "Explore Careers", "Career Compare", "Opportunity Board", "Career Quest", "Career Journal", "Weekly Planner", "Skill Roadmap", "Scholarships", "Universities", "Career Report", "AI Mentor", "Accessibility", "Help & Privacy", "Change Password")
+PAGE_ICONS = {"Dashboard": "⌂", "Explore Careers": "⌕", "Career Compare": "⇄", "Opportunity Board": "✦", "Career Quest": "🎮", "Career Journal": "📔", "Weekly Planner": "✓", "Skill Roadmap": "↗", "Scholarships": "🦋", "Universities": "♜", "Career Report": "↓", "AI Mentor": "🦋", "Accessibility": "Aa", "Help & Privacy": "?", "Change Password": "🔒", "Admin": "⚙"}
 GLOBAL_UNIVERSITY_COUNTRIES = (
     "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria",
     "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan", "Bolivia",
@@ -1164,7 +1164,7 @@ THEMES = {
 
 
 def init_state() -> None:
-    defaults = {"app_stage":"login", "auth_mode":"login", "light_mode":False, "nav_page":"Dashboard", "student_name":"", "student_email":"", "quiz_name":"", "intake_mode":None, "intake_index":0, "intake_answers":{}, "personality_mode":None, "personality_index":0, "personality_answers":{}, "personality_complete":False, "backend_profile":None, "backend_error":"", "top_matches":[], "career_insights":{}, "score_error":"", "local_roadmap_completed":set(), "mentor_history":[], "career_journal":{"version":1, "currentPage":0, "pages":[]}, "journal_last_save_token":"", "journal_reminder_checked":False, "weekly_goals":[], "weekly_reminder_checked":False}
+    defaults = {"app_stage":"login", "auth_mode":"login", "light_mode":False, "nav_page":"Dashboard", "student_name":"", "student_email":"", "quiz_name":"", "intake_mode":None, "intake_index":0, "intake_answers":{}, "personality_mode":None, "personality_index":0, "personality_answers":{}, "personality_complete":False, "backend_profile":None, "backend_error":"", "top_matches":[], "career_insights":{}, "score_error":"", "local_roadmap_completed":set(), "mentor_history":[], "career_journal":{"version":1, "currentPage":0, "pages":[]}, "journal_last_save_token":"", "journal_reminder_checked":False, "weekly_goals":[], "weekly_reminder_checked":False, "feedback_entries":[], "accessibility_large_text":False, "accessibility_high_contrast":False, "accessibility_reduce_motion":False}
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
 
@@ -1231,6 +1231,8 @@ PERSISTED_PROFILE_KEYS = (
     "personality_index", "personality_answers", "personality_complete",
     "top_matches", "career_insights", "score_error", "mentor_history",
     "nav_page", "local_roadmap_completed", "career_journal", "weekly_goals",
+    "feedback_entries", "accessibility_large_text", "accessibility_high_contrast",
+    "accessibility_reduce_motion",
 )
 
 
@@ -1313,7 +1315,16 @@ def theme_name() -> str:
 
 
 def inject_styles() -> None:
-    t = THEMES[theme_name()]
+    # Work on a copy so one student's accessibility choices never mutate the
+    # shared theme dictionary for another session.
+    t = dict(THEMES[theme_name()])
+    if st.session_state.get("accessibility_high_contrast"):
+        if theme_name() == "Light":
+            t.update(text="#16082f", muted="#493764", line="rgba(45,18,91,.55)", input_text="#08050d")
+        else:
+            t.update(text="#ffffff", muted="#f1edf9", line="rgba(255,255,255,.48)", input_text="#ffffff")
+    large_text_css = ".stApp{font-size:1.1rem!important}" if st.session_state.get("accessibility_large_text") else ""
+    reduce_motion_css = "*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}" if st.session_state.get("accessibility_reduce_motion") else ""
     st.markdown(f"""<style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
     :root{{--bg:{t['bg']};--text:{t['text']};--muted:{t['muted']};--card:{t['card']};--soft:{t['soft']};--line:{t['line']};--sidebar:{t['sidebar']};--input:{t['input']};--input-text:{t['input_text']};--shadow:{t['shadow']};--score:{t['score']};--mentor:{t['mentor']};--violet:#7c3aed;--pink:#ef5e7d;--mint:#15bfa2}} *{{font-family:'DM Sans',sans-serif}} .stApp{{background:var(--bg);color:var(--text)}} #MainMenu,footer{{visibility:hidden}} header,[data-testid='stHeader']{{background:transparent!important;height:2.8rem!important}} [data-testid='stToolbar']{{visibility:visible!important;display:flex!important}} [data-testid='stToolbar'] button,[data-testid='stHeader'] button{{visibility:visible!important;display:flex!important;opacity:1!important;color:var(--text)!important;pointer-events:auto!important}} .block-container{{max-width:1500px;padding-top:2.2rem;padding-bottom:2.5rem}} [data-testid='stSidebar']{{background:var(--sidebar)!important;border-right:1px solid rgba(211,193,255,.24)!important}} [data-testid='stSidebar'] *{{color:#f8f5ff!important}} h1,h2,h3{{font-family:'Space Grotesk',sans-serif;color:var(--text)}}
@@ -1336,6 +1347,10 @@ def inject_styles() -> None:
        an optional local-backend fallback never looks like an app failure. */
     [data-testid='stAlert']{{background:var(--card)!important;border:1px solid var(--line)!important;border-radius:12px!important;box-shadow:0 8px 22px var(--shadow)!important}}
     [data-testid='stAlert'] *,[data-testid='stAlert'] p,[data-testid='stAlert'] div{{color:var(--text)!important;-webkit-text-fill-color:var(--text)!important}}
+    {large_text_css}
+    {reduce_motion_css}
+    button:focus-visible,input:focus-visible,textarea:focus-visible,[role='radio']:focus-visible,[role='combobox']:focus-visible,a:focus-visible{{outline:3px solid #ff5b7d!important;outline-offset:3px!important}}
+    @media(prefers-reduced-motion:reduce){{*,*::before,*::after{{animation:none!important;transition:none!important;scroll-behavior:auto!important}}}}
     @media(max-width:900px){{.block-container{{padding:1rem}}.match-grid{{grid-template-columns:1fr}}.top-title{{font-size:1.9rem}}.question-text{{font-size:1.3rem}}}}
     </style>""", unsafe_allow_html=True)
 
@@ -4310,6 +4325,41 @@ def render_admin() -> None:
     st.markdown("<div class='top-title'>Admin · User accounts</div><div class='top-subtitle'>Manage registered accounts and their saved profile data.</div>", unsafe_allow_html=True)
     st.warning("Deleting an account permanently removes its login and all saved quiz, RIASEC, roadmap, and chat data.")
     users = list_users()
+    with st.expander("Feedback inbox", expanded=bool(st.session_state.get("admin_feedback_cache"))):
+        st.caption("Feedback is loaded only when requested so the admin page stays fast.")
+        if st.button("Load saved feedback", use_container_width=True, key="admin_load_feedback"):
+            feedback_rows: list[dict[str, object]] = []
+            with st.spinner("Loading feedback from saved student profiles..."):
+                for account in users:
+                    account_state = load_student_state(str(account.get("email", "")))
+                    for entry in account_state.get("feedback_entries", []):
+                        if not isinstance(entry, dict):
+                            continue
+                        feedback_rows.append({
+                            **entry,
+                            "student_name": account.get("name", "Student"),
+                            "student_email": account.get("email", ""),
+                        })
+            feedback_rows.sort(key=lambda row: str(row.get("submitted_at", "")), reverse=True)
+            st.session_state.admin_feedback_cache = feedback_rows
+        feedback_rows = list(st.session_state.get("admin_feedback_cache", []))
+        if feedback_rows:
+            st.caption(f"{len(feedback_rows)} feedback item(s)")
+            for entry in feedback_rows:
+                contact_line = (
+                    f" · Contact allowed: {escape(str(entry.get('student_email', '')))}"
+                    if entry.get("contact_ok") else " · Contact not requested"
+                )
+                feedback_text = escape(str(entry.get("message", ""))).replace("\n", "<br>")
+                st.markdown(
+                    f"<div class='panel'><h3>{escape(str(entry.get('category', 'Feedback')))}</h3>"
+                    f"<p class='muted'>{escape(str(entry.get('student_name', 'Student')))} · "
+                    f"{escape(str(entry.get('submitted_at', '')))}{contact_line}</p>"
+                    f"<p>{feedback_text}</p></div>",
+                    unsafe_allow_html=True,
+                )
+        elif "admin_feedback_cache" in st.session_state:
+            st.info("No saved feedback has been submitted yet.")
     if not users:
         st.info("No user accounts have been created yet.")
         return
@@ -4370,6 +4420,170 @@ def render_change_password() -> None:
             st.error(error)
         elif updated:
             st.success("Password updated successfully. You can use it the next time you log in.")
+
+
+def json_safe_value(value: object) -> object:
+    """Return a JSON-compatible copy for private account data exports."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(key): json_safe_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe_value(item) for item in value]
+    if isinstance(value, set):
+        return [json_safe_value(item) for item in sorted(value, key=str)]
+    return str(value)
+
+
+def current_student_export() -> dict[str, object]:
+    """Build a private export without passwords, API keys, or admin settings."""
+    saved_profile = {
+        key: json_safe_value(st.session_state.get(key))
+        for key in PERSISTED_PROFILE_KEYS
+        if key != "app_stage"
+    }
+    return {
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "account": {
+            "student_id": active_student_id(),
+            "display_name": profile_name(),
+            "email": str(st.session_state.get("student_email", "")),
+        },
+        "career_ai_profile": saved_profile,
+        "privacy_note": "This export intentionally excludes your password and all application API keys.",
+    }
+
+
+def render_accessibility() -> None:
+    """Let each student keep readable, lower-motion display preferences."""
+    st.markdown(
+        "<div class='top-title'>Accessibility</div>"
+        "<div class='top-subtitle'>Adjust Career AI so it is more comfortable to read and navigate.</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<div class='panel'><h3>Display preferences</h3>"
+        "<p class='muted'>These choices are saved to your account and apply in both light and dark mode.</p></div>",
+        unsafe_allow_html=True,
+    )
+    st.toggle(
+        "Larger interface text",
+        key="accessibility_large_text",
+        help="Makes the main interface text larger without changing your browser settings.",
+        on_change=save_current_student_state,
+    )
+    st.toggle(
+        "Higher contrast",
+        key="accessibility_high_contrast",
+        help="Strengthens text and border contrast in the current theme.",
+        on_change=save_current_student_state,
+    )
+    st.toggle(
+        "Reduce motion",
+        key="accessibility_reduce_motion",
+        help="Stops decorative transitions and animations.",
+        on_change=save_current_student_state,
+    )
+    st.markdown(
+        "<div class='panel'><h3>Keyboard navigation</h3>"
+        "<p class='muted'><b>Tab</b> moves forward, <b>Shift + Tab</b> moves back, and "
+        "<b>Enter</b> or <b>Space</b> activates the focused control. Focused controls use a bright outline.</p>"
+        "<p class='muted'>Career AI also respects your device's reduced-motion preference automatically.</p></div>",
+        unsafe_allow_html=True,
+    )
+    if st.button("Reset accessibility preferences", use_container_width=True):
+        st.session_state.accessibility_large_text = False
+        st.session_state.accessibility_high_contrast = False
+        st.session_state.accessibility_reduce_motion = False
+        save_current_student_state()
+        st.rerun()
+
+
+def render_help_privacy() -> None:
+    """Explain data use, accept feedback, and provide a private export."""
+    st.markdown(
+        "<div class='top-title'>Help & Privacy</div>"
+        "<div class='top-subtitle'>Understand the project, report a problem, or download your saved data.</div>",
+        unsafe_allow_html=True,
+    )
+    about_col, privacy_col = st.columns(2, gap="medium")
+    with about_col:
+        st.markdown(
+            "<div class='panel'><h3>About Career AI</h3>"
+            "<p class='muted'>Career AI is a student-built exploration project. It helps you compare possibilities; "
+            "it is not professional career counselling, an admission decision, or a scholarship guarantee.</p>"
+            "<p class='muted'>Always confirm courses, eligibility, fees, deadlines, and career requirements on official sources.</p></div>",
+            unsafe_allow_html=True,
+        )
+    with privacy_col:
+        st.markdown(
+            "<div class='panel'><h3>What is saved</h3>"
+            "<p class='muted'>Your account can save quiz and RIASEC answers, matches, roadmap progress, journal pages, "
+            "weekly goals, AI Mentor history, feedback, and accessibility choices.</p>"
+            "<p class='muted'>Passwords are stored as secure hashes. When you use AI Mentor, your question and relevant "
+            "career profile may be sent to the configured AI provider to create the reply. Do not enter highly sensitive personal, medical, or financial information.</p></div>",
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("### Report a problem or share an idea")
+    with st.form("career_ai_feedback_form", clear_on_submit=True):
+        category = st.selectbox(
+            "Feedback type",
+            ("Suggestion", "Bug", "Incorrect recommendation", "Accessibility", "Other"),
+        )
+        message = st.text_area(
+            "What happened, or what should we improve?",
+            placeholder="Describe the page, what you expected, and what happened...",
+        )
+        contact_ok = st.checkbox("The admin may contact me at my account email about this feedback")
+        submitted = st.form_submit_button("Send feedback  →", use_container_width=True)
+    if submitted:
+        cleaned_message = message.strip()
+        if len(cleaned_message) < 10:
+            st.error("Please add at least 10 characters so the feedback is understandable.")
+        else:
+            submitted_at = datetime.now(timezone.utc).isoformat()
+            feedback_id = hashlib.sha256(
+                f"{st.session_state.get('student_email', '')}|{submitted_at}|{cleaned_message}".encode("utf-8")
+            ).hexdigest()[:12]
+            entry = {
+                "id": feedback_id,
+                "submitted_at": submitted_at,
+                "category": category,
+                "message": cleaned_message,
+                "contact_ok": bool(contact_ok),
+            }
+            entries = list(st.session_state.get("feedback_entries", []))
+            entries.append(entry)
+            st.session_state.feedback_entries = entries[-50:]
+            with st.spinner("Saving your feedback..."):
+                save_current_student_state()
+            st.success("Thank you—your feedback has been saved for the Career AI admin.")
+
+    entries = list(st.session_state.get("feedback_entries", []))
+    if entries:
+        with st.expander(f"My submitted feedback ({len(entries)})"):
+            for entry in reversed(entries[-10:]):
+                st.markdown(
+                    f"<div class='panel'><b>{escape(str(entry.get('category', 'Feedback')))}</b>"
+                    f"<p class='muted'>{escape(str(entry.get('submitted_at', '')))}</p>"
+                    f"<p>{escape(str(entry.get('message', '')))}</p></div>",
+                    unsafe_allow_html=True,
+                )
+
+    st.markdown("### Download my data")
+    st.caption("The download includes your saved Career AI profile. It never includes your password or application API keys.")
+    export_bytes = json.dumps(current_student_export(), indent=2, ensure_ascii=False).encode("utf-8")
+    safe_name = re.sub(r"[^a-z0-9]+", "-", profile_name().lower()).strip("-") or "student"
+    st.download_button(
+        "Download my private data (.json)",
+        data=export_bytes,
+        file_name=f"career-ai-data-{safe_name}.json",
+        mime="application/json",
+        use_container_width=True,
+    )
 
 
 def render_dashboard() -> None:
@@ -4567,11 +4781,12 @@ def render_ai_mentor() -> None:
     def ask_selected_model(new_question: str) -> tuple[str, str]:
         # Use exactly one configured model. This avoids a slow chain of failed
         # requests and prevents a depleted OpenAI account overriding Gemini.
-        if using_gemini:
-            return gemini_mentor_reply(new_question)
-        if using_gpt:
-            return gpt_mentor_reply(new_question)
-        return ollama_mentor_reply(new_question)
+        with st.spinner("AI Mentor is thinking through your question..."):
+            if using_gemini:
+                return gemini_mentor_reply(new_question)
+            if using_gpt:
+                return gpt_mentor_reply(new_question)
+            return ollama_mentor_reply(new_question)
 
     if st.button("Clear conversation", key="mentor_clear_history"):
         st.session_state.mentor_history = []
@@ -5003,6 +5218,8 @@ def render_app() -> None:
     elif page == "Scholarships": render_scholarships()
     elif page == "Career Report": render_career_report()
     elif page == "AI Mentor": render_ai_mentor()
+    elif page == "Accessibility": render_accessibility()
+    elif page == "Help & Privacy": render_help_privacy()
     elif page == "Change Password": render_change_password()
     elif page == "Admin": render_admin()
     else: render_simple_page(page)
