@@ -17,6 +17,7 @@ import random
 import re
 import sys
 import time
+from datetime import date, timedelta
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -881,7 +882,7 @@ THEMES = {
 
 
 def init_state() -> None:
-    defaults = {"app_stage":"login", "auth_mode":"login", "light_mode":False, "nav_page":"Dashboard", "student_name":"", "student_email":"", "quiz_name":"", "intake_mode":None, "intake_index":0, "intake_answers":{}, "personality_mode":None, "personality_index":0, "personality_answers":{}, "personality_complete":False, "backend_profile":None, "backend_error":"", "top_matches":[], "career_insights":{}, "score_error":"", "local_roadmap_completed":set(), "mentor_history":[], "career_journal":{"version":1, "currentPage":0, "pages":[]}, "journal_last_save_token":""}
+    defaults = {"app_stage":"login", "auth_mode":"login", "light_mode":False, "nav_page":"Dashboard", "student_name":"", "student_email":"", "quiz_name":"", "intake_mode":None, "intake_index":0, "intake_answers":{}, "personality_mode":None, "personality_index":0, "personality_answers":{}, "personality_complete":False, "backend_profile":None, "backend_error":"", "top_matches":[], "career_insights":{}, "score_error":"", "local_roadmap_completed":set(), "mentor_history":[], "career_journal":{"version":1, "currentPage":0, "pages":[]}, "journal_last_save_token":"", "journal_reminder_checked":False}
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
 
@@ -981,6 +982,10 @@ def restore_student_state(account: dict[str, object]) -> None:
     st.session_state.local_roadmap_completed = set(
         st.session_state.get("local_roadmap_completed", [])
     )
+    # Check once after each fresh login/browser-session restore. This value is
+    # deliberately not persisted, so dismissing a reminder never changes the
+    # student's journal or permanently disables future reminders.
+    st.session_state.journal_reminder_checked = False
 
 
 def resume_stage() -> str:
@@ -3371,6 +3376,133 @@ def normalise_career_journal(raw: object) -> dict[str, object]:
     return {"version": 2, "currentPage": current_page, "monthNotes": clean_month_notes, "pages": clean_pages}
 
 
+def journal_page_has_content(page: object) -> bool:
+    """Return whether a journal page contains a real entry or decoration."""
+    if not isinstance(page, dict):
+        return False
+    writing_fields = (
+        "title", "goal", "steps", "win", "reflection", "nextStep",
+        "mood", "dayWord", "futureNote",
+    )
+    has_writing = any(str(page.get(field, "")).strip() for field in writing_fields)
+    decorations = page.get("decorations", [])
+    return has_writing or (isinstance(decorations, list) and bool(decorations))
+
+
+def missed_journal_date(raw: object, today: date | None = None) -> str:
+    """Return yesterday's ISO date when an established journal missed it."""
+    journal = normalise_career_journal(raw)
+    meaningful_pages = [
+        page for page in journal["pages"] if journal_page_has_content(page)
+    ]
+    # Brand-new accounts and students who have never used the journal should
+    # not receive a missed-day prompt.
+    if not meaningful_pages:
+        return ""
+
+    today = today or date.today()
+    yesterday = today - timedelta(days=1)
+    dated_pages: list[tuple[date, dict[str, object]]] = []
+    for page in meaningful_pages:
+        try:
+            page_date = date.fromisoformat(str(page.get("date", "")))
+        except ValueError:
+            continue
+        dated_pages.append((page_date, page))
+
+    # If the student's first real journal use is today, yesterday was not a
+    # missed day. Older journals with no entry yesterday do receive a prompt.
+    if not dated_pages or min(page_date for page_date, _ in dated_pages) > yesterday:
+        return ""
+    if any(page_date == yesterday for page_date, _ in dated_pages):
+        return ""
+    return yesterday.isoformat()
+
+
+def blank_journal_page(page_date: str) -> dict[str, object]:
+    """Create the same empty dated page shape used by the journal component."""
+    return {
+        "id": f"page-{page_date}-{time.time_ns()}",
+        "date": page_date,
+        "title": "",
+        "goal": "",
+        "steps": "",
+        "win": "",
+        "reflection": "",
+        "nextStep": "",
+        "mood": "",
+        "dayWord": "",
+        "futureNote": "",
+        "font": "DM Sans",
+        "color": "#49365f",
+        "paper": "cream",
+        "decorations": [],
+    }
+
+
+def open_journal_on_date(page_date: str) -> None:
+    """Select an existing journal date or prepare a blank page for that date."""
+    journal = normalise_career_journal(st.session_state.get("career_journal", {}))
+    pages = journal["pages"]
+    selected_index = next(
+        (index for index, page in enumerate(pages) if page.get("date") == page_date),
+        None,
+    )
+    if selected_index is None:
+        pages.append(blank_journal_page(page_date))
+        selected_index = len(pages) - 1
+    journal["currentPage"] = selected_index
+    st.session_state.career_journal = journal
+    st.session_state.app_stage = "dashboard"
+    st.session_state.nav_page = "Career Journal"
+
+
+def maybe_render_journal_reminder() -> None:
+    """Gently offer to fill yesterday's missed journal entry once per session."""
+    if st.session_state.get("journal_reminder_checked", False):
+        return
+    missed_date = missed_journal_date(st.session_state.get("career_journal", {}))
+    if not missed_date:
+        st.session_state.journal_reminder_checked = True
+        return
+
+    missed_day = date.fromisoformat(missed_date).strftime("%A, %d %B")
+
+    def reminder_body() -> None:
+        st.markdown("### Aww, your journal missed you 🥺")
+        st.write(
+            f"It looks like your little career step for **{missed_day}** is still waiting. "
+            "No pressure—would you like to open yesterday's page and add it now?"
+        )
+        yes_column, no_column = st.columns(2)
+        with yes_column:
+            if st.button(
+                "Yes, open yesterday 📔",
+                use_container_width=True,
+                key="open_missed_journal",
+            ):
+                open_journal_on_date(missed_date)
+                st.session_state.journal_reminder_checked = True
+                st.rerun()
+        with no_column:
+            if st.button(
+                "No, maybe later",
+                use_container_width=True,
+                key="dismiss_missed_journal",
+            ):
+                # Dismiss only for this login session; do not create, edit, or
+                # save a journal page when the student chooses No.
+                st.session_state.journal_reminder_checked = True
+                st.rerun()
+
+    if hasattr(st, "dialog"):
+        st.dialog("A tiny journal reminder", width="small")(reminder_body)()
+    else:
+        # Compatibility fallback for an older local Streamlit installation.
+        with st.container(border=True):
+            reminder_body()
+
+
 def render_career_journal() -> None:
     """Render the draggable, account-saved career progress journal."""
     st.markdown(
@@ -3974,6 +4106,10 @@ def main() -> None:
     restore_session_from_url()
     inject_styles()
     stage = st.session_state.app_stage
+    if stage != "login" and st.session_state.get("student_email"):
+        # Run before whichever saved page the returning student resumes, so
+        # the gentle reminder truly appears as they enter the signed-in app.
+        maybe_render_journal_reminder()
     if stage == "login": render_login()
     elif stage == "welcome": render_welcome()
     elif stage == "intake": render_intake()
