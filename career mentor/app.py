@@ -3310,6 +3310,8 @@ def normalise_career_journal(raw: object) -> dict[str, object]:
         "reflection": 2000,
         "nextStep": 1000,
         "mood": 40,
+        "dayWord": 40,
+        "futureNote": 1000,
     }
 
     def bounded_number(value: object, minimum: float, maximum: float, fallback: float) -> float:
