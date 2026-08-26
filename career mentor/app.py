@@ -23,6 +23,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 # The root app.py launches this file with runpy. Include this folder on the
 # import path so database.py can be imported both locally and on Streamlit.
@@ -53,6 +54,7 @@ except ImportError:  # Lets the rest of the student project run until deploy ins
 # Transparent butterfly logo: it blends into the page instead of appearing
 # as a screenshot with a dark square behind it.
 LOGO_PATH = str(Path(__file__).parent / "assets" / "career-ai-logo-clean.png")
+JOURNAL_COMPONENT_PATH = Path(__file__).parent / "journal_component"
 JOB_CATALOG_PATH = Path(__file__).parent / "data" / "all_jobs.txt"
 UNIVERSITY_DATA_PATH = Path(__file__).parent / "data" / "universities_scholarships.txt"
 # Change this if your FastAPI server uses a different host, port, or route.
@@ -69,10 +71,14 @@ GEMINI_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/opena
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
 DEFAULT_OLLAMA_MODEL = "llama3.2"
 st.set_page_config(page_title="Career AI", page_icon=LOGO_PATH, layout="wide", initial_sidebar_state="expanded")
+career_journal_component = components.declare_component(
+    "career_journal",
+    path=str(JOURNAL_COMPONENT_PATH),
+)
 initialise_database()
 
-PAGES = ("Dashboard", "Explore Careers", "Career Quest", "Skill Roadmap", "Scholarships", "Universities", "AI Mentor", "Change Password")
-PAGE_ICONS = {"Dashboard": "⌂", "Explore Careers": "⌕", "Career Quest": "🎮", "Skill Roadmap": "↗", "Scholarships": "🦋", "Universities": "♜", "AI Mentor": "🦋", "Change Password": "🔒", "Admin": "⚙"}
+PAGES = ("Dashboard", "Explore Careers", "Career Quest", "Career Journal", "Skill Roadmap", "Scholarships", "Universities", "AI Mentor", "Change Password")
+PAGE_ICONS = {"Dashboard": "⌂", "Explore Careers": "⌕", "Career Quest": "🎮", "Career Journal": "📔", "Skill Roadmap": "↗", "Scholarships": "🦋", "Universities": "♜", "AI Mentor": "🦋", "Change Password": "🔒", "Admin": "⚙"}
 GLOBAL_UNIVERSITY_COUNTRIES = (
     "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria",
     "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan", "Bolivia",
@@ -875,7 +881,7 @@ THEMES = {
 
 
 def init_state() -> None:
-    defaults = {"app_stage":"login", "auth_mode":"login", "light_mode":False, "nav_page":"Dashboard", "student_name":"", "student_email":"", "quiz_name":"", "intake_mode":None, "intake_index":0, "intake_answers":{}, "personality_mode":None, "personality_index":0, "personality_answers":{}, "personality_complete":False, "backend_profile":None, "backend_error":"", "top_matches":[], "career_insights":{}, "score_error":"", "local_roadmap_completed":set(), "mentor_history":[]}
+    defaults = {"app_stage":"login", "auth_mode":"login", "light_mode":False, "nav_page":"Dashboard", "student_name":"", "student_email":"", "quiz_name":"", "intake_mode":None, "intake_index":0, "intake_answers":{}, "personality_mode":None, "personality_index":0, "personality_answers":{}, "personality_complete":False, "backend_profile":None, "backend_error":"", "top_matches":[], "career_insights":{}, "score_error":"", "local_roadmap_completed":set(), "mentor_history":[], "career_journal":{"version":1, "currentPage":0, "pages":[]}, "journal_last_save_token":""}
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
 
@@ -941,7 +947,7 @@ PERSISTED_PROFILE_KEYS = (
     "intake_mode", "intake_index", "intake_answers", "personality_mode",
     "personality_index", "personality_answers", "personality_complete",
     "top_matches", "career_insights", "score_error", "mentor_history",
-    "nav_page", "local_roadmap_completed",
+    "nav_page", "local_roadmap_completed", "career_journal",
 )
 
 
@@ -3288,6 +3294,101 @@ def render_career_game() -> None:
         st.rerun()
 
 
+def normalise_career_journal(raw: object) -> dict[str, object]:
+    """Keep journal data compact, JSON-safe, and suitable for account storage."""
+    if not isinstance(raw, dict):
+        return {"version": 1, "currentPage": 0, "pages": []}
+
+    allowed_fonts = {"DM Sans", "Caveat", "Lora", "Playfair Display", "Quicksand"}
+    allowed_papers = {"cream", "blush", "lavender", "sage", "sky", "peach"}
+    text_limits = {
+        "date": 24,
+        "title": 100,
+        "goal": 500,
+        "steps": 3000,
+        "win": 800,
+        "reflection": 2000,
+        "nextStep": 1000,
+        "mood": 40,
+    }
+
+    def bounded_number(value: object, minimum: float, maximum: float, fallback: float) -> float:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return fallback
+        return max(minimum, min(maximum, number))
+
+    clean_pages: list[dict[str, object]] = []
+    pages = raw.get("pages", [])
+    if not isinstance(pages, list):
+        pages = []
+    for page_number, page in enumerate(pages[:366]):
+        if not isinstance(page, dict):
+            continue
+        clean_page: dict[str, object] = {
+            "id": str(page.get("id") or f"page-{page_number + 1}")[:80],
+            "font": str(page.get("font", "DM Sans")) if str(page.get("font", "DM Sans")) in allowed_fonts else "DM Sans",
+            "color": str(page.get("color", "#49365f"))[:20],
+            "paper": str(page.get("paper", "cream")) if str(page.get("paper", "cream")) in allowed_papers else "cream",
+        }
+        for field, limit in text_limits.items():
+            clean_page[field] = str(page.get(field, ""))[:limit]
+
+        clean_decorations: list[dict[str, object]] = []
+        decorations = page.get("decorations", [])
+        if isinstance(decorations, list):
+            for decoration_number, decoration in enumerate(decorations[:80]):
+                if not isinstance(decoration, dict):
+                    continue
+                decoration_type = str(decoration.get("type", "sticker"))
+                if decoration_type not in {"sticker", "washi"}:
+                    continue
+                clean_decorations.append({
+                    "id": str(decoration.get("id") or f"decor-{decoration_number + 1}")[:80],
+                    "type": decoration_type,
+                    "sticker": int(bounded_number(decoration.get("sticker", 0), 0, 19, 0)),
+                    "tapeStyle": int(bounded_number(decoration.get("tapeStyle", 0), 0, 7, 0)),
+                    "x": bounded_number(decoration.get("x", 50), 0, 100, 50),
+                    "y": bounded_number(decoration.get("y", 50), 0, 100, 50),
+                    "size": bounded_number(decoration.get("size", 90), 30, 240, 90),
+                    "rotation": bounded_number(decoration.get("rotation", 0), -180, 180, 0),
+                })
+        clean_page["decorations"] = clean_decorations
+        clean_pages.append(clean_page)
+
+    current_page = int(bounded_number(raw.get("currentPage", 0), 0, max(0, len(clean_pages) - 1), 0))
+    return {"version": 1, "currentPage": current_page, "pages": clean_pages}
+
+
+def render_career_journal() -> None:
+    """Render the draggable, account-saved career progress journal."""
+    st.markdown(
+        "<div class='top-title'>Career Journal</div>"
+        "<div class='top-subtitle'>Turn small daily steps into a career story that feels like yours.</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption("📔 Drag stickers and washi tape, personalise your writing, then choose Save journal to keep it with your account.")
+    journal = normalise_career_journal(st.session_state.get("career_journal", {}))
+    st.session_state.career_journal = journal
+    result = career_journal_component(
+        journal=journal,
+        light_mode=bool(st.session_state.light_mode),
+        student_name=str(st.session_state.get("student_name", "Student")),
+        key=f"career_journal_{st.session_state.get('student_email', 'guest')}",
+        default=None,
+    )
+    if not isinstance(result, dict) or result.get("action") != "save":
+        return
+    save_token = str(result.get("token", ""))
+    if not save_token or save_token == st.session_state.get("journal_last_save_token", ""):
+        return
+    st.session_state.journal_last_save_token = save_token
+    st.session_state.career_journal = normalise_career_journal(result.get("journal", {}))
+    save_current_student_state()
+    st.toast("Journal saved to your Career AI account 📔")
+
+
 def render_sidebar() -> str:
     with st.sidebar:
         logo_col, name_col = st.columns([.3, .7], gap="small")
@@ -3848,6 +3949,7 @@ def render_app() -> None:
     if page == "Dashboard": render_dashboard()
     elif page == "Explore Careers": render_explore_careers()
     elif page == "Career Quest": render_career_game()
+    elif page == "Career Journal": render_career_journal()
     elif page == "Skill Roadmap": render_skill_roadmap()
     elif page == "Universities": render_universities()
     elif page == "Scholarships": render_scholarships()
