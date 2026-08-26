@@ -199,6 +199,30 @@ CAREER_GAME_QUESTIONS = (
         "answer": "Speech-Language Pathologist",
         "explanation": "Speech-language pathologists assess and treat communication and swallowing disorders across the lifespan.",
     },
+    {
+        "clue": "A company suspects money is being hidden through false vendors. I trace transactions, reconstruct records, and prepare financial evidence that may be used in court. Who am I?",
+        "options": ("Forensic Accountant", "External Auditor", "Financial Controller", "Investment Analyst"),
+        "answer": "Forensic Accountant",
+        "explanation": "Forensic accountants investigate financial irregularities and present evidence suitable for disputes, insurance claims, or legal proceedings.",
+    },
+    {
+        "clue": "Several districts report the same unusual illness. I compare incidence rates, identify exposure patterns, and design a study to test what is driving the outbreak. Who am I?",
+        "options": ("Epidemiologist", "Infectious-Disease Physician", "Biostatistician", "Public Health Inspector"),
+        "answer": "Epidemiologist",
+        "explanation": "Epidemiologists study the distribution and causes of health events in populations and test ways to control them.",
+    },
+    {
+        "clue": "Demand is rising but deliveries are late. I analyse forecasts, inventory levels, supplier lead times, and transport data to locate the bottleneck. Which role fits best?",
+        "options": ("Supply Chain Analyst", "Procurement Specialist", "Logistics Coordinator", "Operations Manager"),
+        "answer": "Supply Chain Analyst",
+        "explanation": "Supply chain analysts use data to improve the flow of materials and products across suppliers, inventory, production, and distribution.",
+    },
+    {
+        "clue": "A laboratory produces millions of DNA sequence reads. I build computational workflows to align them, detect variants, and connect patterns with biological questions. Who am I?",
+        "options": ("Bioinformatics Scientist", "Molecular Geneticist", "Clinical Data Manager", "Machine Learning Engineer"),
+        "answer": "Bioinformatics Scientist",
+        "explanation": "Bioinformatics scientists combine programming, statistics, and biology to interpret large molecular datasets such as DNA or gene-expression data.",
+    },
 )
 
 # Direct websites for frequently recommended institutions. Every other entry
@@ -3122,7 +3146,19 @@ def render_personality_results() -> None:
 def start_career_game() -> None:
     """Create a fresh ten-question round with balanced answer positions."""
     question_count = min(10, len(CAREER_GAME_QUESTIONS))
-    order = random.sample(range(len(CAREER_GAME_QUESTIONS)), question_count)
+    previous_order = st.session_state.get("career_game_order", [])
+    previous_questions = {
+        item for item in previous_order
+        if isinstance(item, int) and 0 <= item < len(CAREER_GAME_QUESTIONS)
+    } if isinstance(previous_order, list) else set()
+    unused_questions = [
+        question_index for question_index in range(len(CAREER_GAME_QUESTIONS))
+        if question_index not in previous_questions
+    ]
+    # With 20 questions and 10 per round, replay can use the exact unused
+    # half of the bank, guaranteeing no repeat from the immediately prior round.
+    candidate_pool = unused_questions if len(unused_questions) >= question_count else list(range(len(CAREER_GAME_QUESTIONS)))
+    order = random.sample(candidate_pool, question_count)
     # Spread correct answers across A/B/C/D, then shuffle that position plan.
     # This prevents a round from accidentally placing every answer first.
     answer_slots = [position % 4 for position in range(question_count)]
