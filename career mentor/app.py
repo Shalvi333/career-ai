@@ -657,6 +657,7 @@ CAREER_FIELD_SIGNALS = {
 }
 
 
+@st.cache_data(show_spinner=False)
 def load_job_catalog() -> dict[str, tuple[str, ...]]:
     """Read the full user-provided job catalogue, organised by category."""
     categories: dict[str, list[str]] = {}
@@ -930,6 +931,7 @@ def career_profile_connection(title: str) -> str:
     return "Not currently in your top matches, but useful to compare with your recommended paths."
 
 
+@st.cache_data(show_spinner=False)
 def load_university_data() -> tuple[tuple[dict[str, str], ...], tuple[dict[str, str], ...]]:
     """Read university recommendations and the master scholarship directory."""
     lines = [line.strip() for line in UNIVERSITY_DATA_PATH.read_text(encoding="utf-8").splitlines()]
@@ -1753,6 +1755,19 @@ def auth_api_url() -> str:
         return os.getenv("AUTH_API_URL", DEFAULT_AUTH_API_URL).rstrip("/")
 
 
+def unavailable_local_backend(url: str) -> bool:
+    """Avoid waiting for localhost-only APIs inside Streamlit Cloud.
+
+    The deployed Streamlit process cannot reach the FastAPI server running on
+    a student's laptop. Career AI already has built-in catalogues and local
+    fallbacks, so waiting for that guaranteed failure only makes navigation
+    feel frozen.
+    """
+    running_in_cloud = bool(os.getenv("STREAMLIT_SHARING_MODE")) or Path("/mount/src").exists()
+    local_url = url.startswith("http://127.0.0.1:") or url.startswith("http://localhost:")
+    return running_in_cloud and local_url
+
+
 def active_student_id() -> str:
     profile = st.session_state.backend_profile or {}
     return str(profile.get("student_id", ""))
@@ -2501,6 +2516,8 @@ def update_roadmap_step(student_id: str, step_id: int, completed: bool) -> str:
 @st.cache_data(ttl=60, show_spinner=False)
 def load_careers_from_backend(url: str) -> tuple[list[dict[str, object]], str]:
     """Fetches GET /careers, which should return db.get_all_careers()."""
+    if unavailable_local_backend(url):
+        return [], ""
     request = Request(url, headers={"Accept": "application/json"}, method="GET")
     try:
         with urlopen(request, timeout=8) as response:
@@ -5522,7 +5539,6 @@ def render_app() -> None:
         # This runs before the sidebar radio widget is created, so Streamlit
         # can safely restore or change its selected item on this rerun.
         st.session_state.nav_page = destination
-        save_current_student_state()
     page = render_sidebar()
     if page == "Dashboard": render_dashboard()
     elif page == "Explore Careers": render_explore_careers()
