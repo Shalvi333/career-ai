@@ -43,6 +43,12 @@ from database import (
     save_student_state,
     update_user_password,
 )
+try:
+    from report_builder import build_career_report
+except ImportError:
+    # Keep the rest of Career AI usable until the optional PDF dependency is
+    # installed locally or by Streamlit Cloud from requirements.txt.
+    build_career_report = None
 
 try:
     from openai import OpenAI
@@ -78,8 +84,8 @@ career_journal_component = components.declare_component(
 )
 initialise_database()
 
-PAGES = ("Dashboard", "Explore Careers", "Career Quest", "Career Journal", "Skill Roadmap", "Scholarships", "Universities", "AI Mentor", "Change Password")
-PAGE_ICONS = {"Dashboard": "⌂", "Explore Careers": "⌕", "Career Quest": "🎮", "Career Journal": "📔", "Skill Roadmap": "↗", "Scholarships": "🦋", "Universities": "♜", "AI Mentor": "🦋", "Change Password": "🔒", "Admin": "⚙"}
+PAGES = ("Dashboard", "Explore Careers", "Career Compare", "Opportunity Board", "Career Quest", "Career Journal", "Weekly Planner", "Skill Roadmap", "Scholarships", "Universities", "Career Report", "AI Mentor", "Change Password")
+PAGE_ICONS = {"Dashboard": "⌂", "Explore Careers": "⌕", "Career Compare": "⇄", "Opportunity Board": "✦", "Career Quest": "🎮", "Career Journal": "📔", "Weekly Planner": "✓", "Skill Roadmap": "↗", "Scholarships": "🦋", "Universities": "♜", "Career Report": "↓", "AI Mentor": "🦋", "Change Password": "🔒", "Admin": "⚙"}
 GLOBAL_UNIVERSITY_COUNTRIES = (
     "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria",
     "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan", "Bolivia",
@@ -104,6 +110,30 @@ QUOTES = (
     "Choose a path that lets your strengths grow.",
     "A career is explored one thoughtful step at a time.",
     "Your interests are clues, not limits.",
+)
+
+# Safe, widely available starting points. Availability and age rules can
+# change, so every external opportunity is presented as something to verify,
+# never as a guaranteed placement or award.
+OPPORTUNITY_CATALOG = (
+    {"title":"Build a role-specific mini project", "kind":"Portfolio project", "effort":"1-2 weeks", "families":("all",), "riasec":("R","I","A","S","E","C"), "description":"Create one small piece of evidence connected to a career you are exploring, then write what you learned.", "action":"Choose a problem, make a first version, ask for feedback, and save the result in your portfolio.", "url":""},
+    {"title":"Forage virtual job simulations", "kind":"Virtual experience", "effort":"2-6 hours", "families":("Business & Leadership","Technology & Data","Law & Public Service","Healthcare & Life Sciences","Creative & Communication"), "riasec":("I","S","E","C"), "description":"Free self-paced simulations designed with employers to introduce realistic workplace tasks.", "action":"Select one programme related to a career match and save the completion evidence.", "url":"https://www.theforage.com/"},
+    {"title":"Kaggle Learn and beginner competitions", "kind":"Competition", "effort":"2-8 hours/week", "families":("Technology & Data","Science & Research","Business & Leadership"), "riasec":("I","C"), "description":"Practice Python, data analysis and machine learning through short lessons and public datasets.", "action":"Complete one micro-course and publish a beginner notebook explaining your approach.", "url":"https://www.kaggle.com/learn"},
+    {"title":"GitHub Skills guided projects", "kind":"Course", "effort":"1-3 hours", "families":("Technology & Data",), "riasec":("I","R","C"), "description":"Interactive exercises that teach version control, collaboration and portfolio-ready development habits.", "action":"Finish one GitHub Skills course and pin the resulting repository to your profile.", "url":"https://skills.github.com/"},
+    {"title":"Zooniverse citizen-science project", "kind":"Volunteering", "effort":"1-3 hours/week", "families":("Science & Research","Environment & Agriculture","Healthcare & Life Sciences"), "riasec":("I","R","S"), "description":"Help research teams classify real images, texts or observations in online citizen-science projects.", "action":"Contribute to one project for a week and record the research question and methods you observed.", "url":"https://www.zooniverse.org/projects"},
+    {"title":"UN Volunteers online opportunities", "kind":"Volunteering", "effort":"Varies", "families":("Law & Public Service","Education & Social Impact","Business & Leadership","Creative & Communication","Environment & Agriculture"), "riasec":("S","E","A","C"), "description":"Search remote volunteering tasks that support social-impact organisations. Check each listing's age and eligibility rules.", "action":"Shortlist one suitable listing and compare its skills, time commitment and eligibility before applying.", "url":"https://app.unv.org/"},
+    {"title":"FIRST robotics challenge or local robotics club", "kind":"Competition", "effort":"Weekly", "families":("Engineering & Built World","Technology & Data","Science & Research"), "riasec":("R","I","E"), "description":"Team engineering challenges combine design, building, coding, testing and presentation.", "action":"Find a school/local team or recreate a small challenge independently if a team is unavailable.", "url":"https://www.firstinspires.org/"},
+    {"title":"Science fair investigation", "kind":"Competition", "effort":"3-8 weeks", "families":("Science & Research","Healthcare & Life Sciences","Environment & Agriculture","Engineering & Built World"), "riasec":("I","R"), "description":"Turn a testable question into a small investigation, log observations and communicate the evidence.", "action":"Ask a teacher to review safety and feasibility before beginning the experiment.", "url":""},
+    {"title":"Behance portfolio case study", "kind":"Portfolio project", "effort":"1-2 weeks", "families":("Creative & Communication",), "riasec":("A","E"), "description":"Present the process behind an illustration, design, photo, animation, fashion or visual-communication project.", "action":"Show your research, drafts, decisions, final work and reflection rather than only the finished image.", "url":"https://www.behance.net/"},
+    {"title":"Write and publish an evidence-based article", "kind":"Portfolio project", "effort":"1 week", "families":("Creative & Communication","Law & Public Service","Science & Research","Education & Social Impact"), "riasec":("A","I","S"), "description":"Research a question, verify sources, interview someone if possible, and publish a clear article or school newsletter piece.", "action":"Choose a topic connected to a career match and ask a teacher to review your sourcing.", "url":""},
+    {"title":"Create a performance or audition portfolio", "kind":"Portfolio project", "effort":"2-4 weeks", "families":("Creative & Communication",), "riasec":("A","S","E"), "description":"Plan, practise and record a polished music, dance, theatre or spoken-word performance.", "action":"Include two contrasting pieces and a short reflection on feedback and improvement.", "url":""},
+    {"title":"Community teaching or peer mentoring", "kind":"Volunteering", "effort":"1-2 hours/week", "families":("Education & Social Impact","Healthcare & Life Sciences","Creative & Communication"), "riasec":("S","E"), "description":"Tutor a peer, help a younger student, or run a beginner activity with appropriate adult supervision.", "action":"Plan one short session, gather feedback, and note which parts of teaching energised you.", "url":""},
+    {"title":"Career interview with a professional", "kind":"Career exploration", "effort":"30-60 minutes", "families":("all",), "riasec":("R","I","A","S","E","C"), "description":"Ask someone in a field about their normal workday, training route, challenges and advice for students.", "action":"Prepare five questions, request permission politely, and record only with their consent.", "url":""},
+    {"title":"edX course audit", "kind":"Course", "effort":"2-5 hours/week", "families":("all",), "riasec":("I","R","A","S","E","C"), "description":"Explore university-level subjects online. Many courses can be audited, while certificates may cost money.", "action":"Choose one beginner course and confirm the audit/cost terms before enrolling.", "url":"https://www.edx.org/"},
+    {"title":"OpenLearn free course", "kind":"Course", "effort":"2-5 hours/week", "families":("all",), "riasec":("I","A","S","E","C"), "description":"Free short courses across technology, science, business, society, languages and creative subjects.", "action":"Complete one course aligned with a current career match and add the reflection to your journal.", "url":"https://www.open.edu/openlearn/free-courses"},
+    {"title":"School enterprise mini venture", "kind":"Project", "effort":"2-4 weeks", "families":("Business & Leadership","Creative & Communication","Technology & Data"), "riasec":("E","C","A"), "description":"Plan a tiny ethical product, event or service and learn budgeting, communication and customer research.", "action":"Keep the scope safe and small, involve a teacher/guardian, and document decisions rather than focusing only on profit.", "url":""},
+    {"title":"Environmental observation project", "kind":"Portfolio project", "effort":"2 weeks", "families":("Environment & Agriculture","Science & Research"), "riasec":("R","I","S"), "description":"Observe a local biodiversity, waste, water or energy question and organise the findings clearly.", "action":"Use non-invasive methods, follow local rules, and suggest one evidence-based improvement.", "url":""},
+    {"title":"Design a sports training or analysis log", "kind":"Portfolio project", "effort":"2 weeks", "families":("Sports & Fitness","Healthcare & Life Sciences","Technology & Data"), "riasec":("R","I","S"), "description":"Track practice, technique, recovery or match observations and turn them into a safe improvement plan.", "action":"Avoid medical claims and review the plan with a qualified coach or teacher.", "url":""},
 )
 
 # A lightweight game that helps students distinguish between careers with
@@ -634,6 +664,258 @@ def load_job_catalog() -> dict[str, tuple[str, ...]]:
 JOB_CATALOG = load_job_catalog()
 ALL_JOBS = tuple(sorted({job for jobs in JOB_CATALOG.values() for job in jobs}))
 
+# Career Comparison Lab content. Every role in the 900+ catalogue inherits a
+# field-aware profile, while regulated or unusually specialised roles receive
+# a more precise training note below. These are exploration summaries rather
+# than country-specific admission or licensing rules.
+CAREER_COMPARISON_FAMILY = {
+    "Business, Management & Finance": "business",
+    "Technology, IT & Computer Science": "technology",
+    "Engineering (Non-Software)": "engineering",
+    "Healthcare & Medicine": "healthcare",
+    "Science & Research": "science",
+    "Education & Academia": "education",
+    "Law, Legal Services & Public Policy": "law_public",
+    "Government, Public Service & Military": "law_public",
+    "Arts, Design & Creative Fields": "creative",
+    "Media, Entertainment & Performing Arts": "creative",
+    "Marketing, Advertising & Sales": "business",
+    "Hospitality, Travel & Tourism": "hospitality",
+    "Food Production, Agriculture & Farming": "hospitality",
+    "Skilled Trades & Construction": "trades",
+    "Manufacturing & Industrial Production": "trades",
+    "Transportation & Logistics": "transport",
+    "Energy, Mining & Natural Resources": "engineering",
+    "Environment, Conservation & Sustainability": "environment_social",
+    "Social Services, Counseling & Community Work": "environment_social",
+    "Beauty, Personal Care & Wellness": "wellness",
+    "Sports & Athletics": "sports",
+    "Real Estate & Property": "business",
+    "Retail & Customer Service": "business",
+    "Maritime & Aviation Specialties": "transport",
+    "Writing, Publishing & Translation": "writing",
+    "Emerging & Interdisciplinary Fields": "interdisciplinary",
+    "Skilled Craft & Artisan Work": "creative",
+    "Security & Protective Services": "security",
+    "Freelance, Gig & Independent Work": "writing",
+    "Unique, Niche & Unconventional Careers": "interdisciplinary",
+    "Additional Global Career Titles": "interdisciplinary",
+}
+
+CAREER_COMPARISON_DETAILS = {
+    "business": {
+        "education": "A business-related degree can help, but portfolios, certifications and relevant experience may also provide entry routes.",
+        "preparation": "About 1–4 years for initial study; leadership roles normally require additional experience.",
+        "skills": "communication, analysis, planning, teamwork and decision-making",
+        "work_style": "Meetings, planning and problem-solving with people, targets, budgets or operations.",
+        "opportunities": "Companies, start-ups, banks, consultancies, non-profits, government and self-employment.",
+        "advantages": "Transferable skills, broad sector choice and several routes into leadership or entrepreneurship.",
+        "challenges": "Deadlines, commercial pressure, competition and responsibility for decisions or results.",
+    },
+    "technology": {
+        "education": "A computing degree is common; a strong project portfolio, recognised certifications or structured self-study can also support entry for some roles.",
+        "preparation": "Roughly 6–18 months for an entry portfolio, or 3–4 years through a degree route.",
+        "skills": "logical thinking, technical tools, debugging, communication and continuous learning",
+        "work_style": "Focused computer-based work mixed with collaboration, testing and iterative problem-solving.",
+        "opportunities": "Technology companies and digital teams across finance, health, media, education, government and more.",
+        "advantages": "Skills can transfer across industries, with many specialisations and opportunities to build visible projects.",
+        "challenges": "Tools change quickly; complex debugging, screen time and regular upskilling are part of the work.",
+    },
+    "engineering": {
+        "education": "An accredited engineering or closely related technical degree is the usual route; some countries require professional registration for specific responsibilities.",
+        "preparation": "Usually 3–5 years of study, followed by supervised experience for professional recognition where required.",
+        "skills": "mathematics, design, analysis, technical communication and practical problem-solving",
+        "work_style": "A mix of calculations, design, testing, documentation, teamwork and sometimes site or laboratory work.",
+        "opportunities": "Infrastructure, manufacturing, energy, transport, research, construction and technology organisations.",
+        "advantages": "Tangible problem-solving, strong technical depth and work that can affect real systems and communities.",
+        "challenges": "Safety responsibility, detailed standards, demanding study and constraints involving cost, time and materials.",
+    },
+    "healthcare": {
+        "education": "Training varies from vocational certificates to professional degrees, supervised clinical practice and mandatory licensing.",
+        "preparation": "Approximately 1–12+ years depending on the profession, country and specialisation.",
+        "skills": "science foundations, empathy, communication, accuracy, ethics and calm decision-making",
+        "work_style": "People-focused work in clinics, hospitals, laboratories, community services or animal-care settings.",
+        "opportunities": "Hospitals, clinics, laboratories, public health, rehabilitation, research, community care and private practice.",
+        "advantages": "Meaningful service, clear specialisations and the chance to improve health and wellbeing directly.",
+        "challenges": "Emotional pressure, strict regulation, long training for some roles and possible shift or emergency work.",
+    },
+    "science": {
+        "education": "A relevant science degree is typical; independent research roles often require a master's degree or PhD.",
+        "preparation": "Usually 3–4 years for a first degree and 5–9+ years for advanced research training.",
+        "skills": "scientific reasoning, research methods, data analysis, accuracy and technical writing",
+        "work_style": "Experiments, fieldwork, modelling, data analysis, reading and careful documentation.",
+        "opportunities": "Universities, research institutes, laboratories, government, environmental bodies and R&D teams.",
+        "advantages": "Discovery-driven work, intellectual depth and the possibility of contributing new knowledge.",
+        "challenges": "Experiments can fail, research funding is competitive and advanced roles may require lengthy study.",
+    },
+    "education": {
+        "education": "A subject or education degree plus a teaching credential is common for schools; academic careers usually require postgraduate study.",
+        "preparation": "Around 3–5 years for school teaching, and longer for university research or specialist practice.",
+        "skills": "subject knowledge, explanation, listening, planning, patience and assessment",
+        "work_style": "Teaching, mentoring, preparation, feedback and collaboration with learners, families or colleagues.",
+        "opportunities": "Schools, universities, training organisations, educational technology, tutoring and curriculum development.",
+        "advantages": "Visible impact on learners, strong human connection and opportunities to specialise by subject or age group.",
+        "challenges": "Preparation and administrative workload, varied learner needs and emotional responsibility.",
+    },
+    "law_public": {
+        "education": "Routes vary: legal practice usually needs a recognised law qualification and licensing, while public-service roles may use degrees, examinations or specialist training.",
+        "preparation": "Commonly 3–7 years for regulated legal paths; other public roles vary widely.",
+        "skills": "research, critical reading, writing, public speaking, judgement and ethical reasoning",
+        "work_style": "Research, case or policy analysis, documentation, negotiation and service to clients or the public.",
+        "opportunities": "Law firms, courts, government, policy organisations, companies, NGOs and international bodies.",
+        "advantages": "Work can influence rights, policy, organisations and communities, with many specialist areas.",
+        "challenges": "High-stakes decisions, extensive reading, strict procedures and potentially adversarial or sensitive situations.",
+    },
+    "creative": {
+        "education": "Formal study can build technique and networks, but a strong portfolio, auditions and consistent practice are often equally important.",
+        "preparation": "Portfolio or performance development is ongoing; initial focused training often takes 1–4 years.",
+        "skills": "creative technique, storytelling, observation, collaboration and presenting a strong portfolio or showreel",
+        "work_style": "Idea development, rehearsal or production, critique, revision and project-based collaboration.",
+        "opportunities": "Studios, agencies, theatres, production companies, brands, cultural organisations and freelance work.",
+        "advantages": "Self-expression, varied projects and the ability to build a recognisable body of work.",
+        "challenges": "Income and project flow may vary; feedback, auditions, deadlines and portfolio competition can be intense.",
+    },
+    "hospitality": {
+        "education": "Entry may begin through practical experience, certificates, apprenticeships or a hospitality, culinary, tourism or agricultural degree.",
+        "preparation": "Several months to 4 years depending on whether the route is practical, managerial or scientific.",
+        "skills": "service, organisation, practical technique, teamwork, safety and time management",
+        "work_style": "Hands-on, customer- or production-focused work in fast-moving environments, often with seasonal routines.",
+        "opportunities": "Hotels, restaurants, travel companies, farms, food businesses, events and entrepreneurship.",
+        "advantages": "Practical learning, visible results, international possibilities and routes into management or ownership.",
+        "challenges": "Irregular hours, physical demands, seasonal pressure and close attention to safety and quality.",
+    },
+    "trades": {
+        "education": "Vocational training, an apprenticeship and role-specific safety certification are common; technical management roles may need a degree.",
+        "preparation": "Often 2–5 years through training and supervised workplace experience.",
+        "skills": "practical technique, measurement, safety, troubleshooting and dependable teamwork",
+        "work_style": "Hands-on installation, repair, production or construction using tools, plans and safety procedures.",
+        "opportunities": "Construction, maintenance, manufacturing, utilities, workshops and independent contracting.",
+        "advantages": "Concrete results, strong practical expertise and potential pathways to self-employment.",
+        "challenges": "Physical demands, safety risks, site conditions and the need to keep certifications current.",
+    },
+    "transport": {
+        "education": "Specialised training, medical or safety clearance and licences are common; engineering and management roles may require degrees.",
+        "preparation": "From several months to 5+ years depending on the licence, vehicle and level of responsibility.",
+        "skills": "situational awareness, safety, technical procedure, communication and calm decision-making",
+        "work_style": "Operational, safety-critical work involving vehicles, routes, schedules, crews or logistics systems.",
+        "opportunities": "Airlines, airports, shipping, ports, rail, logistics companies, public transport and regulators.",
+        "advantages": "Clear technical progression, travel or operational variety and responsibility for important services.",
+        "challenges": "Irregular schedules, strict medical or safety standards, high responsibility and time away from home in some roles.",
+    },
+    "environment_social": {
+        "education": "A relevant environment, social science, social work or counselling degree is common; regulated helping professions may require licensing.",
+        "preparation": "Typically 3–6 years depending on postgraduate or supervised-practice requirements.",
+        "skills": "research or listening, empathy, communication, field assessment, ethics and community collaboration",
+        "work_style": "A blend of field or client work, documentation, analysis, advocacy and multi-agency teamwork.",
+        "opportunities": "NGOs, government, conservation bodies, schools, health services, charities and community organisations.",
+        "advantages": "Purpose-led work with visible impact on people, communities or the environment.",
+        "challenges": "Complex problems, limited resources, emotional demands and progress that may take time to become visible.",
+    },
+    "wellness": {
+        "education": "A recognised certificate, diploma, apprenticeship or licence may be required; business skills help in independent practice.",
+        "preparation": "Usually several months to 3 years depending on specialisation and local licensing rules.",
+        "skills": "technical care, hygiene, communication, creativity, client service and scheduling",
+        "work_style": "Practical one-to-one service, consultation and repeat client relationships in studios, salons or wellness settings.",
+        "opportunities": "Salons, spas, wellness centres, media productions, retail brands and self-employment.",
+        "advantages": "Creative practical work, direct client feedback and strong potential for independent business.",
+        "challenges": "Standing or repetitive work, building a client base, changing trends and strict hygiene standards.",
+    },
+    "sports": {
+        "education": "Competitive roles depend on performance and coaching; support careers often use sport science, coaching, teaching or health qualifications.",
+        "preparation": "Athletic development is ongoing; professional support routes commonly take 1–5 years of study and practice.",
+        "skills": "sport-specific technique, fitness, recovery, teamwork, tactical awareness and mental resilience",
+        "work_style": "Training, competition, coaching or performance analysis with measurable goals and regular physical practice.",
+        "opportunities": "Clubs, schools, academies, leagues, fitness centres, media and sport-development organisations.",
+        "advantages": "Active work, team connection and the chance to turn performance knowledge into coaching or support roles.",
+        "challenges": "Competition, injury risk, performance pressure and uncertain progression for elite athletes.",
+    },
+    "writing": {
+        "education": "A degree may help for specialist fields, but published work, language ability, subject knowledge and a strong portfolio are central.",
+        "preparation": "A starter portfolio can take 6–18 months; expertise and professional networks grow over time.",
+        "skills": "writing, editing, research, audience awareness, communication and self-management",
+        "work_style": "Independent drafting and revision mixed with interviews, research, feedback and deadline-based collaboration.",
+        "opportunities": "Publishers, media, companies, education, localisation, agencies and freelance platforms.",
+        "advantages": "Flexible specialisations, portable skills and the ability to communicate ideas across many industries.",
+        "challenges": "Revision-heavy work, competitive portfolios, variable freelance income and frequent deadlines.",
+    },
+    "security": {
+        "education": "Role-specific academy training, background checks, licences or technical qualifications are common.",
+        "preparation": "Several months to 4+ years depending on legal powers, technical level and public-service requirements.",
+        "skills": "observation, judgement, fitness or technical ability, communication and disciplined procedure",
+        "work_style": "Prevention, monitoring, investigation or emergency response under clear rules and chains of responsibility.",
+        "opportunities": "Public services, emergency organisations, companies, events, transport and specialist security firms.",
+        "advantages": "Strong sense of responsibility, structured progression and direct protection of people or systems.",
+        "challenges": "Shift work, risk, stressful incidents, strict conduct standards and extensive screening.",
+    },
+    "interdisciplinary": {
+        "education": "Combine the strongest qualification for the role's main field with projects that demonstrate the second discipline.",
+        "preparation": "Highly variable—often 1–5 years of focused study, experiments, projects or supervised practice.",
+        "skills": "adaptability, research, communication, digital fluency, project work and learning across disciplines",
+        "work_style": "Project-based work that combines tools, subjects or industries and may not follow a single traditional route.",
+        "opportunities": "Start-ups, research teams, specialist consultancies, creative technology, social innovation and independent work.",
+        "advantages": "Space to combine different interests and shape a distinctive professional niche.",
+        "challenges": "Entry routes may be less obvious, job titles change quickly and students must explain their mixed skill set clearly.",
+    },
+}
+
+
+def career_catalog_category(title: str) -> str:
+    """Return the catalogue category for an exact career title."""
+    for category, jobs in JOB_CATALOG.items():
+        if title in jobs:
+            return category
+    return "Additional Global Career Titles"
+
+
+def career_comparison_profile(title: str) -> dict[str, str]:
+    """Build a concise, field-aware comparison profile for any catalogue role."""
+    category = career_catalog_category(title)
+    family = CAREER_COMPARISON_FAMILY.get(category, "interdisciplinary")
+    profile = dict(CAREER_COMPARISON_DETAILS[family])
+    profile["category"] = category
+    lowered = title.lower()
+
+    precise_skills = specific_skills_for_question(title)
+    if precise_skills:
+        profile["skills"] = ", ".join(precise_skills)
+
+    if re.search(r"physician|surgeon|cardiologist|neurologist|oncologist|pediatrician|psychiatrist|radiologist|anesthesiologist|dermatologist|doctor", lowered):
+        profile["education"] = "A recognised medical degree, supervised clinical training, licensing examinations and specialist residency where applicable are required."
+        profile["preparation"] = "Often 7–12+ years after secondary school, varying by country and specialisation."
+    elif any(role in lowered for role in ("dentist", "veterinarian", "pharmacist", "optometrist")):
+        profile["education"] = "A recognised professional degree, supervised practice and local professional licensing are normally required."
+        profile["preparation"] = "Commonly 5–8+ years, depending on country and specialisation."
+    elif any(role in lowered for role in ("lawyer", "attorney", "barrister", "solicitor", "judge")):
+        profile["education"] = "A recognised law qualification followed by the examinations, training or bar admission required in the intended country."
+        profile["preparation"] = "Usually 4–7+ years before independent legal practice."
+    elif any(role in lowered for role in ("pilot", "air traffic controller")):
+        profile["education"] = "Approved specialist training, medical clearance, examinations and progressively higher licences or ratings are required."
+        profile["preparation"] = "About 1–4+ years initially, followed by continuing checks and experience requirements."
+    elif any(role in lowered for role in ("actor", "dancer", "musician", "singer", "athlete", "player")):
+        profile["education"] = "Formal training can strengthen technique, but auditions, performances, coaching and a sustained body of practical work are decisive."
+        profile["preparation"] = "Ongoing development; competitive readiness often follows several years of consistent practice."
+
+    return profile
+
+
+def career_profile_connection(title: str) -> str:
+    """Explain whether a comparison choice is already connected to the profile."""
+    has_written_evidence = any(
+        bool(str(value).strip())
+        for value in st.session_state.get("intake_answers", {}).values()
+    )
+    has_riasec_evidence = any(
+        value in {1, 2, 3, 4, 5}
+        for value in st.session_state.get("personality_answers", {}).values()
+    )
+    if not has_written_evidence and not has_riasec_evidence:
+        return "Take the Career Quiz to see how this option connects to your interests."
+    for match in displayed_career_matches():
+        if match_title(match).casefold() == title.casefold():
+            reason = str(match.get("reason") or match.get("description") or "This role appears in your current career matches.")
+            return f"{match_score(match)} match · {reason}"
+    return "Not currently in your top matches, but useful to compare with your recommended paths."
+
 
 def load_university_data() -> tuple[tuple[dict[str, str], ...], tuple[dict[str, str], ...]]:
     """Read university recommendations and the master scholarship directory."""
@@ -882,7 +1164,7 @@ THEMES = {
 
 
 def init_state() -> None:
-    defaults = {"app_stage":"login", "auth_mode":"login", "light_mode":False, "nav_page":"Dashboard", "student_name":"", "student_email":"", "quiz_name":"", "intake_mode":None, "intake_index":0, "intake_answers":{}, "personality_mode":None, "personality_index":0, "personality_answers":{}, "personality_complete":False, "backend_profile":None, "backend_error":"", "top_matches":[], "career_insights":{}, "score_error":"", "local_roadmap_completed":set(), "mentor_history":[], "career_journal":{"version":1, "currentPage":0, "pages":[]}, "journal_last_save_token":"", "journal_reminder_checked":False}
+    defaults = {"app_stage":"login", "auth_mode":"login", "light_mode":False, "nav_page":"Dashboard", "student_name":"", "student_email":"", "quiz_name":"", "intake_mode":None, "intake_index":0, "intake_answers":{}, "personality_mode":None, "personality_index":0, "personality_answers":{}, "personality_complete":False, "backend_profile":None, "backend_error":"", "top_matches":[], "career_insights":{}, "score_error":"", "local_roadmap_completed":set(), "mentor_history":[], "career_journal":{"version":1, "currentPage":0, "pages":[]}, "journal_last_save_token":"", "journal_reminder_checked":False, "weekly_goals":[], "weekly_reminder_checked":False}
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
 
@@ -948,7 +1230,7 @@ PERSISTED_PROFILE_KEYS = (
     "intake_mode", "intake_index", "intake_answers", "personality_mode",
     "personality_index", "personality_answers", "personality_complete",
     "top_matches", "career_insights", "score_error", "mentor_history",
-    "nav_page", "local_roadmap_completed", "career_journal",
+    "nav_page", "local_roadmap_completed", "career_journal", "weekly_goals",
 )
 
 
@@ -986,6 +1268,7 @@ def restore_student_state(account: dict[str, object]) -> None:
     # deliberately not persisted, so dismissing a reminder never changes the
     # student's journal or permanently disables future reminders.
     st.session_state.journal_reminder_checked = False
+    st.session_state.weekly_reminder_checked = False
 
 
 def resume_stage() -> str:
@@ -1036,6 +1319,7 @@ def inject_styles() -> None:
     :root{{--bg:{t['bg']};--text:{t['text']};--muted:{t['muted']};--card:{t['card']};--soft:{t['soft']};--line:{t['line']};--sidebar:{t['sidebar']};--input:{t['input']};--input-text:{t['input_text']};--shadow:{t['shadow']};--score:{t['score']};--mentor:{t['mentor']};--violet:#7c3aed;--pink:#ef5e7d;--mint:#15bfa2}} *{{font-family:'DM Sans',sans-serif}} .stApp{{background:var(--bg);color:var(--text)}} #MainMenu,footer{{visibility:hidden}} header,[data-testid='stHeader']{{background:transparent!important;height:2.8rem!important}} [data-testid='stToolbar']{{visibility:visible!important;display:flex!important}} [data-testid='stToolbar'] button,[data-testid='stHeader'] button{{visibility:visible!important;display:flex!important;opacity:1!important;color:var(--text)!important;pointer-events:auto!important}} .block-container{{max-width:1500px;padding-top:2.2rem;padding-bottom:2.5rem}} [data-testid='stSidebar']{{background:var(--sidebar)!important;border-right:1px solid rgba(211,193,255,.24)!important}} [data-testid='stSidebar'] *{{color:#f8f5ff!important}} h1,h2,h3{{font-family:'Space Grotesk',sans-serif;color:var(--text)}}
     .brand{{display:flex;align-items:center;gap:10px;margin:3px 0 20px}}.brand-name{{color:var(--text);font:700 1.35rem 'Space Grotesk',sans-serif;white-space:nowrap}}.brand-name span{{color:#ff6b81}}.sidebar-tagline{{color:#cfc4eb;font-size:.73rem;white-space:nowrap}}.top-title{{font:700 2.25rem 'Space Grotesk',sans-serif;color:var(--text);letter-spacing:-1.4px;margin:0 0 3px}}.top-subtitle{{color:var(--muted);margin-bottom:18px}}.panel{{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 15px 38px var(--shadow);box-sizing:border-box}}.panel h3{{margin:0 0 8px}}.muted{{color:var(--muted)!important}}.accent{{color:#8b5cf6;font-weight:700}}.mint{{color:var(--mint);font-weight:700}}
     .choice-card{{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:27px;min-height:250px;text-align:center;box-shadow:0 15px 38px var(--shadow)}}.choice-icon{{font-size:2.6rem;margin-bottom:9px}}.quiz-step{{color:#8b5cf6;font-size:.85rem;font-weight:700;margin-bottom:10px}}.question-card{{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:29px;box-shadow:0 15px 38px var(--shadow)}}.question-number{{color:#8b5cf6;font-weight:700}}.question-text{{font:600 1.6rem 'Space Grotesk',sans-serif;color:var(--text);line-height:1.35;margin:13px 0 21px}}.progress-shell{{height:8px;background:rgba(124,58,237,.16);border-radius:999px;overflow:hidden;margin:11px 0 25px}}.progress-fill{{height:100%;background:linear-gradient(90deg,#7c3aed,#ef5e7d);border-radius:999px}}.result-code{{font:700 3.2rem 'Space Grotesk',sans-serif;color:#8b5cf6;letter-spacing:4px}}.result-number{{font:700 2.7rem 'Space Grotesk',sans-serif;color:var(--text)}}.match-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:11px}}.match-card{{background:var(--soft);border:1px solid var(--line);border-radius:13px;padding:15px;min-height:160px;min-width:0}}.match-card h3{{font-size:clamp(1.15rem,2vw,1.55rem)!important;line-height:1.2!important;word-break:normal!important;overflow-wrap:normal!important;hyphens:none!important}}.match-card p{{word-break:normal!important;overflow-wrap:normal!important;hyphens:none!important}}.match-pill{{float:right;color:var(--mint);background:rgba(21,191,162,.13);padding:4px 8px;border-radius:8px;font-size:.74rem;font-weight:700}}.icon-bubble{{width:43px;height:43px;display:grid;place-items:center;border-radius:14px;background:linear-gradient(145deg,rgba(255,71,88,.34),rgba(19,12,31,.9));border:1px solid rgba(255,99,111,.62);box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 14px rgba(255,48,73,.45);font-size:1.35rem}}.butterfly-mark{{color:#ff5066;text-shadow:0 0 8px #ff324c,0 0 18px rgba(255,50,76,.74);font-size:1.35rem}}.score-panel{{background:var(--score);border-radius:18px;padding:23px;color:#fff;min-height:228px}}.score-panel *{{color:#fff}}.big-score{{font:700 3.2rem 'Space Grotesk',sans-serif;margin:22px 0 8px}}.ai-card{{background:var(--mentor);border:1px solid rgba(236,91,122,.38);border-radius:18px;padding:20px;margin-bottom:17px}}.ai-card p{{color:var(--muted)}}
+    .compare-scroll{{overflow-x:auto;margin:16px 0 20px;border-radius:18px;box-shadow:0 15px 38px var(--shadow)}}.compare-table{{width:100%;min-width:920px;border-collapse:separate;border-spacing:0;background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden}}.compare-table th,.compare-table td{{padding:16px 18px;vertical-align:top;border-right:1px solid var(--line);border-bottom:1px solid var(--line);color:var(--text);line-height:1.55;text-align:left}}.compare-table th{{background:var(--soft);font:700 1.03rem 'Space Grotesk',sans-serif}}.compare-table th:first-child,.compare-table td:first-child{{min-width:175px;color:#8b5cf6;font-weight:700}}.compare-table th:not(:first-child),.compare-table td:not(:first-child){{min-width:245px}}.compare-table tr:last-child td{{border-bottom:0}}.compare-table th:last-child,.compare-table td:last-child{{border-right:0}}
     .login-visual{{position:relative;min-height:610px;display:flex;align-items:center;justify-content:center;overflow:hidden}}.login-orbit{{position:absolute;width:470px;height:470px;border:1px dashed rgba(154,105,255,.34);border-radius:50%}}.login-message{{position:relative;z-index:2;max-width:500px;text-align:center;font:700 3.1rem/1.05 'Space Grotesk',sans-serif;color:var(--text);letter-spacing:-2px}}.login-message span{{color:#ef5e7d}}.float-career{{position:absolute;z-index:3;display:grid;place-items:center;width:93px;height:93px;border-radius:27px;border:1px solid var(--line);background:var(--soft);box-shadow:0 13px 32px var(--shadow);font-size:3rem;animation:career-drift 4s ease-in-out infinite}}.career-1{{top:48px;left:15%}}.career-2{{top:48px;right:15%;animation-delay:-1s}}.career-3{{top:235px;left:2%;animation-delay:-2s}}.career-4{{top:235px;right:2%;animation-delay:-.5s}}.career-5{{bottom:46px;left:17%;animation-delay:-2.5s}}.career-6{{bottom:46px;right:17%;animation-delay:-1.5s}}@keyframes career-drift{{50%{{transform:translateY(-12px) rotate(3deg)}}}}
     .st-key-ai_mentor_card{{background:var(--mentor);border:1px solid rgba(236,91,122,.44)!important;border-radius:17px;padding:12px 13px 16px;box-shadow:0 15px 38px var(--shadow);text-align:center}}[data-testid='stImage'] img{{filter:drop-shadow(0 0 7px rgba(163,99,255,.9)) drop-shadow(0 0 18px rgba(236,91,122,.42));animation:logo-glow 2.8s ease-in-out infinite;object-fit:contain!important}}@keyframes logo-glow{{50%{{filter:drop-shadow(0 0 12px rgba(181,114,255,1)) drop-shadow(0 0 30px rgba(255,91,141,.7))}}}}
     div[data-baseweb='input'],div[data-baseweb='input']>div,div[data-baseweb='textarea'],div[data-baseweb='textarea']>div{{background:var(--input)!important;border-color:var(--line)!important}}[data-testid='stTextInput'] input,[data-testid='stTextArea'] textarea,.stTextInput input,.stTextArea textarea,div[data-baseweb='input'] input,div[data-baseweb='textarea'] textarea{{background-color:var(--input)!important;color:var(--input-text)!important;-webkit-text-fill-color:var(--input-text)!important;caret-color:var(--input-text)!important;opacity:1!important;font-weight:600!important}}[data-testid='stTextInput'] input::placeholder,[data-testid='stTextArea'] textarea::placeholder,.stTextInput input::placeholder,.stTextArea textarea::placeholder{{color:var(--input-text)!important;-webkit-text-fill-color:var(--input-text)!important;opacity:.62!important}}.stButton>button,button[kind='primary'],[data-testid='stFormSubmitButton'] button{{background:linear-gradient(90deg,#7c3aed,#ef5e7d)!important;color:#fff!important;border:1px solid rgba(255,255,255,.16);border-radius:12px;font-weight:700;min-height:43px;box-shadow:0 8px 18px rgba(95,45,199,.24);transition:.24s}}.stButton>button *,[data-testid='stFormSubmitButton'] button *{{color:#fff!important;-webkit-text-fill-color:#fff!important;opacity:1!important}}.stButton>button:hover,button[kind='primary']:hover{{transform:translateY(-2px);color:#fff!important;background:linear-gradient(135deg,#8e50ef,#f1678c)!important;border-color:rgba(255,255,255,.68);box-shadow:inset 0 1px rgba(255,255,255,.82),0 12px 28px rgba(110,55,220,.32);backdrop-filter:blur(16px)}}[data-testid='stAlert']{{background:#fff3f4!important;border:2px solid #e23d55!important;border-radius:12px!important}}[data-testid='stAlert'] *,[data-testid='stAlert'] p,[data-testid='stAlert'] div{{color:#5d1020!important;-webkit-text-fill-color:#5d1020!important;opacity:1!important;font-weight:600!important}}[data-testid='stSidebar'] .stRadio label{{padding:7px 5px;border-radius:10px;background:linear-gradient(145deg,rgba(255,255,255,.1),rgba(145,98,255,.08));border:1px solid rgba(255,255,255,.1)}}
@@ -1135,6 +1419,11 @@ def open_ai_mentor() -> None:
 def open_explore_careers() -> None:
     """Open the complete career catalogue from the dashboard card."""
     st.session_state.nav_page = "Explore Careers"
+
+
+def open_career_compare() -> None:
+    """Open the Career Comparison Lab from another dashboard section."""
+    st.session_state.nav_page = "Career Compare"
 
 
 def open_career_quiz() -> None:
@@ -2407,6 +2696,10 @@ def automatic_roadmap_steps() -> tuple[dict[str, object], ...]:
     )
     primary, secondary = active_theme_ranking()[:2]
     careers = career_suggestions()[:3]
+    completed_weekly_goals = sum(
+        bool(goal.get("completed"))
+        for goal in normalise_weekly_goals(st.session_state.get("weekly_goals", []))
+    )
 
     return (
         {
@@ -2468,6 +2761,12 @@ def automatic_roadmap_steps() -> tuple[dict[str, object], ...]:
             "title": "Build a portfolio and plan your next application",
             "description": "Save projects, achievements and certificates, then check official college, scholarship or internship requirements.",
             "completed": False,
+        },
+        {
+            "id": 11,
+            "title": "Build a consistent weekly action habit",
+            "description": f"You have completed {completed_weekly_goals} weekly career action{'s' if completed_weekly_goals != 1 else ''}. Complete three to establish your first action streak.",
+            "completed": completed_weekly_goals >= 3,
         },
     )
 
@@ -3299,6 +3598,214 @@ def render_career_game() -> None:
         st.rerun()
 
 
+def normalise_weekly_goals(raw: object) -> list[dict[str, object]]:
+    """Return compact, JSON-safe weekly goals for account storage."""
+    if not isinstance(raw, list):
+        return []
+    clean: list[dict[str, object]] = []
+    for position, goal in enumerate(raw[:120]):
+        if not isinstance(goal, dict):
+            continue
+        title = str(goal.get("title", "")).strip()[:140]
+        if not title:
+            continue
+        due_date = str(goal.get("due_date", ""))[:10]
+        try:
+            date.fromisoformat(due_date)
+        except ValueError:
+            due_date = ""
+        completed_date = str(goal.get("completed_date", ""))[:10]
+        try:
+            date.fromisoformat(completed_date)
+        except ValueError:
+            completed_date = ""
+        clean.append({
+            "id": str(goal.get("id") or f"goal-{position + 1}-{time.time_ns()}")[:90],
+            "title": title,
+            "category": str(goal.get("category", "Career action"))[:60],
+            "career": str(goal.get("career", ""))[:100],
+            "due_date": due_date,
+            "notes": str(goal.get("notes", ""))[:800],
+            "source": str(goal.get("source", "Weekly Planner"))[:80],
+            "created_at": str(goal.get("created_at", date.today().isoformat()))[:10],
+            "completed": bool(goal.get("completed", False)),
+            "completed_date": completed_date,
+        })
+    return clean
+
+
+def add_weekly_goal(
+    title: str,
+    category: str = "Career action",
+    career: str = "",
+    due_date: str = "",
+    notes: str = "",
+    source: str = "Weekly Planner",
+) -> bool:
+    """Add a goal once and persist it with the signed-in account."""
+    title = title.strip()
+    if not title:
+        return False
+    goals = normalise_weekly_goals(st.session_state.get("weekly_goals", []))
+    duplicate = any(
+        str(goal.get("title", "")).casefold() == title.casefold()
+        and not goal.get("completed")
+        for goal in goals
+    )
+    if duplicate:
+        return False
+    goals.append({
+        "id": f"goal-{time.time_ns()}",
+        "title": title[:140],
+        "category": category[:60],
+        "career": career[:100],
+        "due_date": due_date or (date.today() + timedelta(days=7)).isoformat(),
+        "notes": notes[:800],
+        "source": source[:80],
+        "created_at": date.today().isoformat(),
+        "completed": False,
+        "completed_date": "",
+    })
+    st.session_state.weekly_goals = normalise_weekly_goals(goals)
+    save_current_student_state()
+    return True
+
+
+def record_completed_goal_in_journal(goal: dict[str, object]) -> None:
+    """Record a planner win on today's journal page without duplicating it."""
+    today = date.today().isoformat()
+    journal = normalise_career_journal(st.session_state.get("career_journal", {}))
+    pages = journal["pages"]
+    page = next((item for item in pages if item.get("date") == today), None)
+    if page is None:
+        page = blank_journal_page(today)
+        pages.append(page)
+    win_line = f"Completed weekly goal: {str(goal.get('title', '')).strip()}"
+    existing = str(page.get("win", "")).strip()
+    if win_line.casefold() not in existing.casefold():
+        page["win"] = "\n".join(part for part in (existing, win_line) if part)[:800]
+    journal["currentPage"] = pages.index(page)
+    st.session_state.career_journal = normalise_career_journal(journal)
+
+
+def update_weekly_goal(goal_id: str, completed: bool) -> None:
+    goals = normalise_weekly_goals(st.session_state.get("weekly_goals", []))
+    for goal in goals:
+        if goal.get("id") != goal_id:
+            continue
+        goal["completed"] = completed
+        goal["completed_date"] = date.today().isoformat() if completed else ""
+        if completed:
+            record_completed_goal_in_journal(goal)
+        break
+    st.session_state.weekly_goals = goals
+    save_current_student_state()
+
+
+def delete_weekly_goal(goal_id: str) -> None:
+    goals = normalise_weekly_goals(st.session_state.get("weekly_goals", []))
+    st.session_state.weekly_goals = [goal for goal in goals if goal.get("id") != goal_id]
+    save_current_student_state()
+
+
+def weekly_goal_streak(goals: list[dict[str, object]]) -> int:
+    """Count consecutive completion days ending at the latest completion."""
+    completed_dates: set[date] = set()
+    for goal in goals:
+        if not goal.get("completed_date"):
+            continue
+        try:
+            completed_dates.add(date.fromisoformat(str(goal["completed_date"])))
+        except ValueError:
+            continue
+    if not completed_dates:
+        return 0
+    cursor = max(completed_dates)
+    streak = 0
+    while cursor in completed_dates:
+        streak += 1
+        cursor -= timedelta(days=1)
+    return streak
+
+
+def opportunity_profile_tags() -> tuple[set[str], tuple[str, ...]]:
+    """Translate current career matches into the opportunity catalogue tags."""
+    family_tags = {
+        "business": "Business & Leadership",
+        "technology": "Technology & Data",
+        "engineering": "Engineering & Built World",
+        "healthcare": "Healthcare & Life Sciences",
+        "science": "Science & Research",
+        "education": "Education & Social Impact",
+        "law_public": "Law & Public Service",
+        "creative": "Creative & Communication",
+        "writing": "Creative & Communication",
+        "hospitality": "Business & Leadership",
+        "trades": "Engineering & Built World",
+        "transport": "Engineering & Built World",
+        "environment_social": "Environment & Agriculture",
+        "wellness": "Healthcare & Life Sciences",
+        "sports": "Sports & Fitness",
+        "security": "Law & Public Service",
+        "interdisciplinary": "Technology & Data",
+    }
+    careers = tuple(match_title(match) for match in displayed_career_matches()[:6])
+    tags: set[str] = set()
+    for career in careers:
+        category = career_catalog_category(career)
+        family = CAREER_COMPARISON_FAMILY.get(category, "interdisciplinary")
+        tags.add(family_tags.get(family, "Technology & Data"))
+    return tags, careers
+
+
+def personalised_opportunities() -> tuple[dict[str, object], ...]:
+    """Rank safe starting opportunities by career families and RIASEC."""
+    tags, careers = opportunity_profile_tags()
+    themes = tuple(active_theme_ranking()[:3])
+    ranked: list[dict[str, object]] = []
+    for position, item in enumerate(OPPORTUNITY_CATALOG):
+        families = set(item.get("families", ()))
+        family_hits = sorted(tags.intersection(families))
+        theme_hits = [code for code in themes if code in item.get("riasec", ())]
+        score = (7 if family_hits else 0) + len(theme_hits) * 2 + (1 if "all" in families else 0)
+        reason_parts: list[str] = []
+        if family_hits:
+            reason_parts.append(f"matches your {', '.join(family_hits)} direction")
+        if theme_hits:
+            reason_parts.append(
+                "supports your " + ", ".join(RIASEC[code][0] for code in theme_hits[:2]) + " work style"
+            )
+        if not reason_parts:
+            reason_parts.append("builds useful evidence while you explore")
+        enriched = dict(item)
+        enriched["score"] = score
+        enriched["reason"] = "It " + " and ".join(reason_parts) + "."
+        enriched["position"] = position
+        enriched["career"] = careers[0] if careers else ""
+        ranked.append(enriched)
+    ranked.sort(key=lambda item: (-int(item["score"]), int(item["position"])))
+    return tuple(ranked)
+
+
+def maybe_render_weekly_reminder() -> None:
+    """Show one gentle reminder when an active goal is due or overdue."""
+    if st.session_state.get("weekly_reminder_checked", False):
+        return
+    st.session_state.weekly_reminder_checked = True
+    today = date.today()
+    due: list[dict[str, object]] = []
+    for goal in normalise_weekly_goals(st.session_state.get("weekly_goals", [])):
+        if goal.get("completed") or not goal.get("due_date"):
+            continue
+        try:
+            if date.fromisoformat(str(goal["due_date"])) <= today:
+                due.append(goal)
+        except ValueError:
+            continue
+    if due:
+        st.toast(f"Your weekly goal ‘{due[0]['title']}’ is ready for a check-in ✓")
+
+
 def normalise_career_journal(raw: object) -> dict[str, object]:
     """Keep journal data compact, JSON-safe, and suitable for account storage."""
     if not isinstance(raw, dict):
@@ -3531,6 +4038,249 @@ def render_career_journal() -> None:
     st.toast("Journal saved to your Career AI account 📔")
 
 
+def render_opportunity_board() -> None:
+    """Show profile-ranked ways to test careers through real small actions."""
+    st.markdown(
+        "<div class='top-title'>Personal Opportunity Board</div>"
+        "<div class='top-subtitle'>Turn a career suggestion into something you can actually try.</div>",
+        unsafe_allow_html=True,
+    )
+    matches = displayed_career_matches()
+    if not matches:
+        st.info("Complete at least one Career AI quiz to personalise this board. You can still browse safe general starting points below.")
+    else:
+        careers = ", ".join(match_title(match) for match in matches[:3])
+        st.markdown(
+            f"<div class='panel'><h3>Matched to your current direction</h3>"
+            f"<p class='muted'>Prioritising activities connected to {escape(careers)} and your strongest work-style themes.</p></div>",
+            unsafe_allow_html=True,
+        )
+
+    all_items = personalised_opportunities()
+    kinds = tuple(sorted({str(item["kind"]) for item in all_items}))
+    filter_col, search_col = st.columns([1, 2])
+    with filter_col:
+        selected_kind = st.selectbox("Opportunity type", ("All types", *kinds), key="opportunity_kind")
+    with search_col:
+        query = st.text_input("Search opportunities", placeholder="Try science, volunteering, design, coding…", key="opportunity_search")
+    query_tokens = tuple(re.findall(r"[a-z0-9]+", query.lower()))
+    filtered = tuple(
+        item for item in all_items
+        if (selected_kind == "All types" or item["kind"] == selected_kind)
+        and (
+            not query_tokens
+            or all(token in " ".join(str(item.get(field, "")) for field in ("title", "kind", "description", "action")).lower() for token in query_tokens)
+        )
+    )
+    st.caption(f"{len(filtered)} ideas · Always verify age, location, cost, eligibility and availability on the official provider page.")
+    if not filtered:
+        st.info("No opportunity matches that search. Try a broader word or choose All types.")
+        return
+
+    for row_start in range(0, min(len(filtered), 18), 2):
+        columns = st.columns(2, gap="medium")
+        for column, item in zip(columns, filtered[row_start:row_start + 2]):
+            with column:
+                with st.container(border=True):
+                    st.caption(f"{item['kind']} · {item['effort']}")
+                    st.markdown(f"### {item['title']}")
+                    st.write(item["description"])
+                    st.markdown(f"**Why it fits:** {item['reason']}")
+                    st.caption(f"Suggested first step: {item['action']}")
+                    action_col, link_col = st.columns(2)
+                    with action_col:
+                        if st.button(
+                            "＋ Add to weekly plan",
+                            key=f"opportunity_add_{item['position']}",
+                            use_container_width=True,
+                        ):
+                            added = add_weekly_goal(
+                                str(item["title"]),
+                                str(item["kind"]),
+                                str(item.get("career", "")),
+                                (date.today() + timedelta(days=7)).isoformat(),
+                                str(item["action"]),
+                                "Opportunity Board",
+                            )
+                            st.toast("Added to your Weekly Planner ✓" if added else "That goal is already in your planner.")
+                    with link_col:
+                        if item.get("url"):
+                            st.link_button("Open official page ↗", str(item["url"]), use_container_width=True)
+                        else:
+                            st.button("Plan with a teacher", key=f"opportunity_safe_{item['position']}", disabled=True, use_container_width=True)
+
+
+def render_weekly_planner() -> None:
+    """Create, track and persist small weekly career actions."""
+    st.markdown(
+        "<div class='top-title'>Weekly Career Planner</div>"
+        "<div class='top-subtitle'>Small, specific actions beat a perfect plan that never begins.</div>",
+        unsafe_allow_html=True,
+    )
+    goals = normalise_weekly_goals(st.session_state.get("weekly_goals", []))
+    st.session_state.weekly_goals = goals
+    active = [goal for goal in goals if not goal.get("completed")]
+    completed = [goal for goal in goals if goal.get("completed")]
+    today = date.today()
+    due_soon = sum(
+        1 for goal in active
+        if goal.get("due_date") and date.fromisoformat(str(goal["due_date"])) <= today + timedelta(days=3)
+    )
+    metric_cols = st.columns(4)
+    metric_cols[0].metric("Active goals", len(active))
+    metric_cols[1].metric("Completed", len(completed))
+    metric_cols[2].metric("Action streak", f"{weekly_goal_streak(goals)} days")
+    metric_cols[3].metric("Due soon", due_soon)
+
+    with st.expander("＋ Add a weekly goal", expanded=not goals):
+        suggestions = tuple(match_title(match) for match in displayed_career_matches()[:6])
+        with st.form("weekly_goal_form", clear_on_submit=True):
+            title = st.text_input("What will you do?", placeholder="Example: Interview a graphic designer about their workday")
+            left, middle, right = st.columns(3)
+            with left:
+                category = st.selectbox("Type", ("Career exploration", "Skill practice", "Course", "Portfolio project", "Application research", "Volunteering", "Other"))
+            with middle:
+                career = st.selectbox("Career connection", ("General exploration", *suggestions))
+            with right:
+                due = st.date_input("Due date", value=today + timedelta(days=7), min_value=today)
+            notes = st.text_area("Notes or first step", placeholder="Make it small enough to begin this week.", height=90)
+            submitted = st.form_submit_button("Add to my week →", use_container_width=True)
+        if submitted:
+            if len(title.strip()) < 4:
+                st.warning("Please give the goal a clear title of at least four characters.")
+            elif add_weekly_goal(title, category, "" if career == "General exploration" else career, due.isoformat(), notes):
+                st.success("Goal added to your week.")
+                st.rerun()
+            else:
+                st.info("That active goal is already in your planner.")
+
+    st.markdown("### This week")
+    if not active:
+        st.markdown(
+            "<div class='panel'><h3>Your week is ready for a first step</h3>"
+            "<p class='muted'>Add your own goal or choose one from the Opportunity Board.</p></div>",
+            unsafe_allow_html=True,
+        )
+        if st.button("Explore personalised opportunities →", use_container_width=True):
+            st.session_state.nav_page = "Opportunity Board"
+            save_current_student_state()
+            st.rerun()
+    for goal in sorted(active, key=lambda item: str(item.get("due_date") or "9999-12-31")):
+        detail_col, action_col = st.columns([5, 1.3], gap="medium")
+        with detail_col:
+            due_label = str(goal.get("due_date") or "No due date")
+            career_label = f" · {goal['career']}" if goal.get("career") else ""
+            st.markdown(
+                f"<div class='panel'><h3>{escape(str(goal['title']))}</h3>"
+                f"<p class='muted'>{escape(str(goal['category']))}{escape(career_label)} · Due {escape(due_label)}</p>"
+                f"<p>{escape(str(goal.get('notes') or 'Choose one small first action and begin.'))}</p></div>",
+                unsafe_allow_html=True,
+            )
+        with action_col:
+            if st.button("✓ Complete", key=f"weekly_complete_{goal['id']}", use_container_width=True):
+                update_weekly_goal(str(goal["id"]), True)
+                st.toast("Completed—and added to today's Career Journal ✓")
+                st.rerun()
+            if st.button("Delete", key=f"weekly_delete_{goal['id']}", use_container_width=True):
+                delete_weekly_goal(str(goal["id"]))
+                st.rerun()
+
+    if completed:
+        with st.expander(f"Completed goals ({len(completed)})"):
+            for goal in sorted(completed, key=lambda item: str(item.get("completed_date", "")), reverse=True):
+                text_col, undo_col = st.columns([5, 1])
+                with text_col:
+                    st.markdown(f"**✓ {goal['title']}**  \nCompleted {goal.get('completed_date') or 'recently'}")
+                with undo_col:
+                    if st.button("Undo", key=f"weekly_undo_{goal['id']}", use_container_width=True):
+                        update_weekly_goal(str(goal["id"]), False)
+                        st.rerun()
+    journal_col, opportunity_col = st.columns(2)
+    with journal_col:
+        if st.button("Open my Career Journal 📔", use_container_width=True):
+            st.session_state.nav_page = "Career Journal"
+            save_current_student_state()
+            st.rerun()
+    with opportunity_col:
+        if st.button("Find another opportunity ✦", use_container_width=True):
+            st.session_state.nav_page = "Opportunity Board"
+            save_current_student_state()
+            st.rerun()
+
+
+def career_report_data() -> dict[str, object]:
+    """Collect the student's saved evidence for the PDF report."""
+    answers = labelled_quiz_answers()
+    matches = displayed_career_matches()
+    career_complete = bool(answers)
+    riasec_complete = bool(st.session_state.get("personality_complete"))
+    manual_ids = set(st.session_state.get("local_roadmap_completed", set()))
+    roadmap: list[dict[str, object]] = []
+    for step in automatic_roadmap_steps():
+        clean_step = dict(step)
+        if roadmap_step_id(clean_step) in {8, 9, 10}:
+            clean_step["completed"] = roadmap_step_id(clean_step) in manual_ids
+        roadmap.append(clean_step)
+    return {
+        "student_name": profile_name(),
+        "generated_on": date.today().strftime("%d %B %Y"),
+        "career_quiz_status": "Completed" if career_complete else "Not completed",
+        "riasec_status": "Completed" if riasec_complete else "Not completed",
+        "current_direction": ", ".join(match_title(match) for match in matches[:3]) if matches else "Complete a quiz to unlock personalised directions.",
+        "profile_answers": tuple((item["question"], item["answer"]) for item in answers),
+        "career_matches": tuple({"career": match_title(match), "score": match_score(match), "reason": str(match.get("reason") or "A direction to explore based on the saved profile.")} for match in matches[:6]),
+        "riasec_scores": tuple((RIASEC[code][0], f"{score} points") for code, score in riasec_scores().items()) if riasec_complete else tuple(),
+        "universities": university_recommendations() if matches else tuple(),
+        "scholarships": recommended_scholarships() if matches else tuple(),
+        "roadmap": tuple(roadmap),
+        "weekly_goals": tuple(normalise_weekly_goals(st.session_state.get("weekly_goals", []))),
+    }
+
+
+def render_career_report() -> None:
+    """Preview and export a printable student career exploration report."""
+    st.markdown(
+        "<div class='top-title'>Career Report</div>"
+        "<div class='top-subtitle'>A clear summary you can discuss with a parent, teacher or counsellor.</div>",
+        unsafe_allow_html=True,
+    )
+    data = career_report_data()
+    matches = data["career_matches"]
+    metric_cols = st.columns(4)
+    metric_cols[0].metric("Quiz answers", len(data["profile_answers"]))
+    metric_cols[1].metric("Career matches", len(matches))
+    metric_cols[2].metric("RIASEC", data["riasec_status"])
+    metric_cols[3].metric("Weekly goals", len(data["weekly_goals"]))
+    if not matches:
+        st.info("Your report can be downloaded now, but it will become personalised after you complete at least one quiz.")
+    else:
+        st.markdown("### Included career directions")
+        st.write(", ".join(str(match["career"]) for match in matches))
+
+    if build_career_report is None:
+        st.warning("PDF export needs ReportLab. Add `reportlab>=4.0` to requirements.txt and install the project requirements.")
+    else:
+        try:
+            report_bytes = build_career_report(data)
+        except Exception as exc:
+            st.warning(f"The report could not be prepared right now: {exc}")
+        else:
+            safe_name = re.sub(r"[^a-z0-9]+", "-", profile_name().lower()).strip("-") or "student"
+            st.download_button(
+                "Download my Career AI report ↓",
+                data=report_bytes,
+                file_name=f"career-ai-report-{safe_name}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+    st.markdown(
+        "<div class='panel'><h3>What the report contains</h3>"
+        "<p class='muted'>Your written profile signals, top career matches and reasons, RIASEC breakdown, universities and scholarships to verify, learning roadmap, and weekly action plan.</p>"
+        "<p class='muted'><b>Important:</b> This is a student exploration report—not professional counselling, an admission decision, or a guarantee of eligibility.</p></div>",
+        unsafe_allow_html=True,
+    )
+
+
 def render_sidebar() -> str:
     with st.sidebar:
         logo_col, name_col = st.columns([.3, .7], gap="small")
@@ -3669,6 +4419,36 @@ def render_dashboard() -> None:
         st.caption("Take a Quick or Full RIASEC Quiz to refine your matches. Re-attempt becomes available after completion.")
     else:
         st.caption("Career quiz replaces your written interests. RIASEC re-attempt keeps those interests and lets you choose Quick or Full again.")
+
+    opportunity_col, planner_col, report_col = st.columns(3, gap="medium")
+    with opportunity_col:
+        if st.button(
+            "✦ Find opportunities",
+            key="dashboard_open_opportunities",
+            use_container_width=True,
+        ):
+            st.session_state.nav_page = "Opportunity Board"
+            save_current_student_state()
+            st.rerun()
+    with planner_col:
+        if st.button(
+            "✓ Plan my week",
+            key="dashboard_open_weekly_planner",
+            use_container_width=True,
+        ):
+            st.session_state.nav_page = "Weekly Planner"
+            save_current_student_state()
+            st.rerun()
+    with report_col:
+        if st.button(
+            "↓ Download career report",
+            key="dashboard_open_career_report",
+            use_container_width=True,
+        ):
+            st.session_state.nav_page = "Career Report"
+            save_current_student_state()
+            st.rerun()
+
     live_careers, _ = load_careers_from_backend(careers_api_url())
     scored_matches = displayed_career_matches() if career_quiz_finished else tuple()
     # Before RIASEC scoring, prioritise the student's discovery answers over
@@ -3712,6 +4492,12 @@ def render_dashboard() -> None:
             for match in scored_matches[:4]
         ) if scored_matches else "<div class='panel'><h3>Complete your Career Quiz</h3><p class='muted'>Your personalised career matches will appear here after you answer the quiz questions.</p></div>"
         st.markdown("<div class='panel'><div class='match-grid'>" + match_cards + "</div></div>", unsafe_allow_html=True)
+        st.button(
+            "Compare career paths →",
+            key="dashboard_compare_careers",
+            use_container_width=True,
+            on_click=open_career_compare,
+        )
     with mentor:
         with st.container(border=True, key="ai_mentor_card"):
             st.markdown("### AI Mentor")
@@ -3847,6 +4633,11 @@ def render_ai_mentor() -> None:
 
 def render_explore_careers() -> None:
     st.markdown("<div class='top-title'>Explore Careers</div><div class='top-subtitle'>Search hundreds of career paths across every major field.</div>", unsafe_allow_html=True)
+    st.button(
+        "Compare 2–3 careers →",
+        key="explore_open_career_compare",
+        on_click=open_career_compare,
+    )
     search_col, category_col = st.columns([2, 1])
     with search_col:
         search_term = st.text_input("Search careers", placeholder="Try software engineer, psychologist, chef…")
@@ -3922,6 +4713,109 @@ def render_explore_careers() -> None:
             f"<h3>{escape(job)}</h3><p class='muted'>{escape(description)}</p></div>"
         )
     st.markdown("<div class='match-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
+
+
+def suggested_comparison_careers() -> tuple[str, ...]:
+    """Choose up to three catalogue roles from the student's current matches."""
+    exact_titles = {title.casefold(): title for title in ALL_JOBS}
+    candidates = [match_title(match) for match in displayed_career_matches()]
+    candidates.extend(career_suggestions())
+    selected: list[str] = []
+    for candidate in candidates:
+        title = exact_titles.get(str(candidate).casefold())
+        if title is None:
+            close = get_close_matches(str(candidate), ALL_JOBS, n=1, cutoff=.9)
+            title = close[0] if close else None
+        if title and title not in selected:
+            selected.append(title)
+        if len(selected) == 3:
+            break
+    return tuple(selected)
+
+
+def render_career_compare() -> None:
+    """Compare education, work and profile fit for two or three careers."""
+    st.markdown(
+        "<div class='top-title'>Career Comparison Lab</div>"
+        "<div class='top-subtitle'>Put 2–3 career paths side by side before deciding what to explore next.</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<div class='ai-card'><h3>Compare the work—not only the job title</h3>"
+        "<p>Search the complete 900+ career catalogue. The table covers training, skills, work style, "
+        "opportunities and trade-offs, and shows how each option connects to your current quiz profile.</p></div>",
+        unsafe_allow_html=True,
+    )
+
+    if "career_compare_choices" not in st.session_state:
+        st.session_state.career_compare_choices = list(suggested_comparison_careers())
+    else:
+        st.session_state.career_compare_choices = [
+            title for title in st.session_state.career_compare_choices
+            if title in ALL_JOBS
+        ][:3]
+
+    selected = st.multiselect(
+        "Choose 2 or 3 careers",
+        ALL_JOBS,
+        key="career_compare_choices",
+        max_selections=3,
+        placeholder="Search careers such as architect, chef, cricketer, psychologist…",
+        help="You can compare any role in the complete Career AI catalogue.",
+    )
+    st.caption(f"{len(selected)} of 3 careers selected")
+
+    if len(selected) < 2:
+        if selected:
+            st.info("Choose one more career to build the comparison.")
+        else:
+            st.info("Choose at least two careers above. If you complete the Career Quiz first, your strongest matches will be selected automatically.")
+        st.button(
+            "Browse the career catalogue →",
+            key="compare_browse_careers",
+            on_click=open_explore_careers,
+        )
+        return
+
+    profiles = [career_comparison_profile(title) for title in selected]
+    rows = (
+        ("Career field", "category"),
+        ("Education & training", "education"),
+        ("Typical preparation", "preparation"),
+        ("Core skills", "skills"),
+        ("Day-to-day work style", "work_style"),
+        ("Opportunity settings", "opportunities"),
+        ("Advantages", "advantages"),
+        ("Challenges", "challenges"),
+    )
+    header = "".join(f"<th>{escape(title)}</th>" for title in selected)
+    body = "".join(
+        "<tr>"
+        f"<td>{escape(label)}</td>"
+        + "".join(f"<td>{escape(profile[field])}</td>" for profile in profiles)
+        + "</tr>"
+        for label, field in rows
+    )
+    profile_row = (
+        "<tr><td>Connection to your profile</td>"
+        + "".join(f"<td>{escape(career_profile_connection(title))}</td>" for title in selected)
+        + "</tr>"
+    )
+    st.markdown(
+        "<div class='compare-scroll'><table class='compare-table'>"
+        f"<thead><tr><th>Compare</th>{header}</tr></thead>"
+        f"<tbody>{body}{profile_row}</tbody></table></div>",
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Career routes and licensing differ by country. Use this as an exploration guide, then confirm current requirements with official education and professional bodies."
+    )
+    st.markdown(
+        "<div class='panel'><h3>Your next step</h3>"
+        "<p class='muted'>Circle the differences that matter most to you—study time, daily environment, creativity, people contact, stability, or practical work. "
+        "Then try one small real activity connected to each shortlisted career before choosing.</p></div>",
+        unsafe_allow_html=True,
+    )
 
 
 def render_skill_roadmap() -> None:
@@ -4090,11 +4984,15 @@ def render_app() -> None:
     page = render_sidebar()
     if page == "Dashboard": render_dashboard()
     elif page == "Explore Careers": render_explore_careers()
+    elif page == "Career Compare": render_career_compare()
+    elif page == "Opportunity Board": render_opportunity_board()
     elif page == "Career Quest": render_career_game()
     elif page == "Career Journal": render_career_journal()
+    elif page == "Weekly Planner": render_weekly_planner()
     elif page == "Skill Roadmap": render_skill_roadmap()
     elif page == "Universities": render_universities()
     elif page == "Scholarships": render_scholarships()
+    elif page == "Career Report": render_career_report()
     elif page == "AI Mentor": render_ai_mentor()
     elif page == "Change Password": render_change_password()
     elif page == "Admin": render_admin()
@@ -4110,6 +5008,7 @@ def main() -> None:
         # Run before whichever saved page the returning student resumes, so
         # the gentle reminder truly appears as they enter the signed-in app.
         maybe_render_journal_reminder()
+        maybe_render_weekly_reminder()
     if stage == "login": render_login()
     elif stage == "welcome": render_welcome()
     elif stage == "intake": render_intake()
