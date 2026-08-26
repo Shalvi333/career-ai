@@ -1239,17 +1239,17 @@ PERSISTED_PROFILE_KEYS = (
 )
 
 
-def save_current_student_state() -> None:
+def save_current_student_state() -> bool:
     """Save quiz, results, chat and roadmap progress for the logged-in user."""
     email = str(st.session_state.get("student_email", "")).strip()
     if not email:
-        return
+        return False
     state: dict[str, object] = {}
     for key in PERSISTED_PROFILE_KEYS:
         value = st.session_state.get(key)
         # JSON cannot store Python sets; roadmap completion is the only one.
         state[key] = sorted(value) if isinstance(value, set) else value
-    save_student_state(email, state)
+    return bool(save_student_state(email, state))
 
 
 def restore_student_state(account: dict[str, object]) -> None:
@@ -4348,46 +4348,90 @@ def render_sidebar() -> str:
     return page
 
 
+def collect_admin_feedback(users: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Collect saved concerns from every account for the protected admin inbox."""
+    feedback_rows: list[dict[str, object]] = []
+    seen: set[tuple[str, str]] = set()
+    for account in users:
+        email = str(account.get("email", "")).strip().lower()
+        if not email:
+            continue
+        account_state = load_student_state(email)
+        entries = account_state.get("feedback_entries", [])
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            identity = (email, str(entry.get("id", "")))
+            if identity in seen:
+                continue
+            seen.add(identity)
+            feedback_rows.append({
+                **entry,
+                "student_name": account.get("name", "Student"),
+                "student_email": email,
+            })
+    feedback_rows.sort(key=lambda row: str(row.get("submitted_at", "")), reverse=True)
+    return feedback_rows
+
+
 def render_admin() -> None:
-    """Private local-demo account management. Deletion cannot be undone."""
-    st.markdown("<div class='top-title'>Admin · User accounts</div><div class='top-subtitle'>Manage registered accounts and their saved profile data.</div>", unsafe_allow_html=True)
-    st.warning("Deleting an account permanently removes its login and all saved quiz, RIASEC, roadmap, and chat data.")
+    """Private account and concern management for the configured administrator."""
+    if not is_admin():
+        st.error("This page is available only to the Career AI administrator.")
+        return
+
+    st.markdown("<div class='top-title'>Admin · Raised concerns</div><div class='top-subtitle'>Review student concerns privately, then manage registered accounts below.</div>", unsafe_allow_html=True)
     users = list_users()
-    with st.expander("Feedback inbox", expanded=bool(st.session_state.get("admin_feedback_cache"))):
-        st.caption("Feedback is loaded only when requested so the admin page stays fast.")
-        if st.button("Load saved feedback", use_container_width=True, key="admin_load_feedback"):
-            feedback_rows: list[dict[str, object]] = []
-            with st.spinner("Loading feedback from saved student profiles..."):
-                for account in users:
-                    account_state = load_student_state(str(account.get("email", "")))
-                    for entry in account_state.get("feedback_entries", []):
-                        if not isinstance(entry, dict):
-                            continue
-                        feedback_rows.append({
-                            **entry,
-                            "student_name": account.get("name", "Student"),
-                            "student_email": account.get("email", ""),
-                        })
-            feedback_rows.sort(key=lambda row: str(row.get("submitted_at", "")), reverse=True)
-            st.session_state.admin_feedback_cache = feedback_rows
-        feedback_rows = list(st.session_state.get("admin_feedback_cache", []))
-        if feedback_rows:
-            st.caption(f"{len(feedback_rows)} feedback item(s)")
-            for entry in feedback_rows:
-                contact_line = (
-                    f" · Contact allowed: {escape(str(entry.get('student_email', '')))}"
-                    if entry.get("contact_ok") else " · Contact not requested"
-                )
-                feedback_text = escape(str(entry.get("message", ""))).replace("\n", "<br>")
-                st.markdown(
-                    f"<div class='panel'><h3>{escape(str(entry.get('category', 'Feedback')))}</h3>"
-                    f"<p class='muted'>{escape(str(entry.get('student_name', 'Student')))} · "
-                    f"{escape(str(entry.get('submitted_at', '')))}{contact_line}</p>"
-                    f"<p>{feedback_text}</p></div>",
-                    unsafe_allow_html=True,
-                )
-        elif "admin_feedback_cache" in st.session_state:
-            st.info("No saved feedback has been submitted yet.")
+
+    inbox_title, inbox_action = st.columns([5, 1])
+    with inbox_title:
+        st.markdown("### Raised concerns & feedback")
+        st.caption("Only the configured admin account can view this inbox.")
+    with inbox_action:
+        refresh_feedback = st.button(
+            "Refresh inbox",
+            use_container_width=True,
+            key="admin_refresh_feedback",
+        )
+
+    if refresh_feedback or "admin_feedback_cache" not in st.session_state:
+        with st.spinner("Loading concerns from saved student profiles..."):
+            st.session_state.admin_feedback_cache = collect_admin_feedback(users)
+
+    feedback_rows = list(st.session_state.get("admin_feedback_cache", []))
+    if feedback_rows:
+        categories = sorted({str(row.get("category", "Other")) for row in feedback_rows})
+        selected_category = st.selectbox(
+            "Filter concerns",
+            ("All concerns", *categories),
+            key="admin_feedback_category",
+        )
+        visible_rows = (
+            feedback_rows
+            if selected_category == "All concerns"
+            else [row for row in feedback_rows if str(row.get("category", "Other")) == selected_category]
+        )
+        st.caption(f"Showing {len(visible_rows)} of {len(feedback_rows)} submitted concern(s)")
+        for entry in visible_rows:
+            contact_line = (
+                f" · Contact allowed: {escape(str(entry.get('student_email', '')))}"
+                if entry.get("contact_ok") else " · Contact permission not given"
+            )
+            feedback_text = escape(str(entry.get("message", ""))).replace("\n", "<br>")
+            st.markdown(
+                f"<div class='panel'><h3>{escape(str(entry.get('category', 'Feedback')))}</h3>"
+                f"<p class='muted'>{escape(str(entry.get('student_name', 'Student')))} · "
+                f"{escape(str(entry.get('submitted_at', '')))}{contact_line}</p>"
+                f"<p>{feedback_text}</p></div>",
+                unsafe_allow_html=True,
+            )
+    else:
+        st.info("No student concerns have been submitted yet.")
+
+    st.markdown("### User accounts")
+    st.warning("Deleting an account permanently removes its login and all saved quiz, RIASEC, roadmap, and chat data.")
     if not users:
         st.info("No user accounts have been created yet.")
         return
@@ -4601,8 +4645,11 @@ def render_help_privacy() -> None:
             entries.append(entry)
             st.session_state.feedback_entries = entries[-50:]
             with st.spinner("Saving your feedback..."):
-                save_current_student_state()
-            st.success("Thank you—your feedback has been saved for the Career AI admin.")
+                feedback_saved = save_current_student_state()
+            if feedback_saved:
+                st.success("Thank you—your concern has been saved in the private admin inbox.")
+            else:
+                st.error("Your concern could not be saved right now. Please check your connection and try again.")
 
     entries = list(st.session_state.get("feedback_entries", []))
     if entries:
