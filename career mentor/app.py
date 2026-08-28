@@ -2801,7 +2801,15 @@ def automatic_roadmap_steps() -> tuple[dict[str, object], ...]:
         and riasec_answered >= riasec_total
     )
     primary, secondary = active_theme_ranking()[:2]
-    careers = career_suggestions()[:3]
+    has_any_completed_quiz = career_complete or riasec_complete
+    matches = displayed_career_matches() if has_any_completed_quiz else tuple()
+    careers = tuple(match_title(match) for match in matches[:3])
+    career_list = ", ".join(careers) if careers else "your future shortlisted careers"
+    skill_list = (
+        ", ".join(SKILLS_BY_THEME[primary][:3])
+        if riasec_complete
+        else "communication, research, digital literacy, and problem-solving"
+    )
     completed_weekly_goals = sum(
         bool(goal.get("completed"))
         for goal in normalise_weekly_goals(st.session_state.get("weekly_goals", []))
@@ -2810,69 +2818,187 @@ def automatic_roadmap_steps() -> tuple[dict[str, object], ...]:
     return (
         {
             "id": 1,
+            "stage": "1. Discover yourself",
             "title": "Complete your Career Discovery Quiz",
             "description": f"{career_answered} of {career_total} career-quiz answers saved." if career_total else "Choose a Quick or Complete Career Discovery Quiz to begin.",
             "completed": career_complete,
+            "manual": False,
         },
         {
             "id": 2,
+            "stage": "1. Discover yourself",
             "title": "Build your written career profile",
             "description": "Your interests, strengths, study preferences, goals, location choices and activities are now used in your recommendations." if career_complete else "This unlocks automatically after the Career Discovery Quiz is complete.",
             "completed": career_complete,
+            "manual": False,
         },
         {
             "id": 3,
+            "stage": "1. Discover yourself",
             "title": "Complete your RIASEC Personality Quiz",
             "description": f"{riasec_answered} of {riasec_total} RIASEC ratings saved." if riasec_total else "Take a Quick or Full RIASEC Quiz to refine your work-style match.",
             "completed": riasec_complete,
+            "manual": False,
         },
         {
             "id": 4,
+            "stage": "1. Discover yourself",
             "title": "Identify your Holland Code work style",
             "description": f"Your strongest current work-style themes are {RIASEC[primary][0]} and {RIASEC[secondary][0]}." if riasec_complete else "This is calculated automatically after the RIASEC quiz.",
             "completed": riasec_complete,
+            "manual": False,
         },
         {
             "id": 5,
+            "stage": "2. Explore and decide",
             "title": "Generate personalised career matches",
-            "description": f"Your written answers and RIASEC profile are now combined. Compare: {', '.join(careers)}." if career_complete and riasec_complete else "This unlocks automatically once both quizzes are complete.",
-            "completed": career_complete and riasec_complete,
+            "description": f"Your current profile has produced these starting directions: {career_list}." if has_any_completed_quiz else "Complete at least one quiz to unlock personalised career directions.",
+            "completed": has_any_completed_quiz,
+            "manual": False,
         },
         {
             "id": 6,
+            "stage": "2. Explore and decide",
             "title": "Prepare your skills and course direction",
-            "description": f"Your learning focus is ready: {', '.join(SKILLS_BY_THEME[primary][:3])}." if riasec_complete else "Complete RIASEC to personalise your skill priorities.",
-            "completed": career_complete and riasec_complete,
+            "description": f"Your first learning focus is ready: {skill_list}." if has_any_completed_quiz else "Complete a quiz to create a starting skill direction.",
+            "completed": has_any_completed_quiz,
+            "manual": False,
         },
         {
             "id": 7,
+            "stage": "2. Explore and decide",
             "title": "Unlock relevant university and scholarship routes",
-            "description": "Your University and Scholarship pages can now use your career direction, location preferences and interests." if career_complete and riasec_complete else "Complete both quizzes to unlock the most focused recommendations.",
-            "completed": career_complete and riasec_complete,
+            "description": "Your University and Scholarship pages can now use your career direction, location preferences and interests." if has_any_completed_quiz else "Complete at least one quiz to unlock profile-based study and funding routes.",
+            "completed": has_any_completed_quiz,
+            "manual": False,
         },
         {
             "id": 8,
+            "stage": "2. Explore and decide",
             "title": "Compare your top career paths",
-            "description": "Read the day-to-day work, entry requirements, courses and opportunities for at least two of your suggested careers.",
+            "description": f"Compare at least three options ({career_list}) for daily work, work environment, salary range, growth, lifestyle and entry requirements.",
             "completed": False,
+            "manual": True,
+        },
+        {
+            "id": 12,
+            "stage": "2. Explore and decide",
+            "title": "Check qualifications, exams and licensing",
+            "description": "For each shortlisted career, note the required school subjects, degree or training route, entrance exams, licences, course length and country-specific rules.",
+            "completed": False,
+            "manual": True,
+        },
+        {
+            "id": 13,
+            "stage": "2. Explore and decide",
+            "title": "Test each option before choosing",
+            "description": "Try a workshop, club activity, job-shadowing session, interview, online simulation or small task connected to each shortlisted career; record what energised or frustrated you.",
+            "completed": False,
+            "manual": True,
         },
         {
             "id": 9,
+            "stage": "3. Build skills and evidence",
             "title": "Start a skill-building project or course",
-            "description": "Choose one small project, club, course, competition or practice activity linked to your preferred path.",
+            "description": f"Choose one focused course, club, competition or practice project that develops {skill_list}; set a realistic finish date.",
             "completed": False,
+            "manual": True,
+        },
+        {
+            "id": 14,
+            "stage": "3. Build skills and evidence",
+            "title": "Complete a skill-gap check",
+            "description": "List the skills your preferred career needs, rate your present level, and choose the two biggest gaps to work on first.",
+            "completed": False,
+            "manual": True,
+        },
+        {
+            "id": 15,
+            "stage": "3. Build skills and evidence",
+            "title": "Gain extracurricular and community experience",
+            "description": "Join a relevant school club, team, competition, volunteering activity or community project and take responsibility for one real outcome.",
+            "completed": False,
+            "manual": True,
         },
         {
             "id": 10,
+            "stage": "3. Build skills and evidence",
             "title": "Build a portfolio and plan your next application",
-            "description": "Save projects, achievements and certificates, then check official college, scholarship or internship requirements.",
+            "description": "Create an evidence folder with your best projects, reflections, certificates, awards and feedback. Improve weak pieces instead of collecting certificates without practice.",
             "completed": False,
+            "manual": True,
+        },
+        {
+            "id": 16,
+            "stage": "3. Build skills and evidence",
+            "title": "Ask a mentor or professional for feedback",
+            "description": f"Speak with a teacher, counsellor, senior student or professional connected to {career_list}; ask about a normal workday, challenges, training and your next improvement.",
+            "completed": False,
+            "manual": True,
+        },
+        {
+            "id": 17,
+            "stage": "4. Plan education and funding",
+            "title": "Create a balanced course and university shortlist",
+            "description": "Shortlist ambitious, realistic and safer choices. Compare curriculum, entry requirements, placements, location, student support, accreditation and official application deadlines.",
+            "completed": False,
+            "manual": True,
+        },
+        {
+            "id": 18,
+            "stage": "4. Plan education and funding",
+            "title": "Make a complete education budget",
+            "description": "Estimate tuition, housing, food, travel, equipment, insurance and visa costs. Record family budget limits and possible savings or part-time options.",
+            "completed": False,
+            "manual": True,
+        },
+        {
+            "id": 19,
+            "stage": "4. Plan education and funding",
+            "title": "Build a scholarship and financial-aid plan",
+            "description": "Check eligibility on official provider websites, collect documents, note essays or recommendations needed, and add every deadline to your calendar.",
+            "completed": False,
+            "manual": True,
+        },
+        {
+            "id": 20,
+            "stage": "5. Prepare for real opportunities",
+            "title": "Gain internship or real-world exposure",
+            "description": "Apply for an internship, apprenticeship, volunteering role, school responsibility, freelance task or supervised project related to your direction.",
+            "completed": False,
+            "manual": True,
+        },
+        {
+            "id": 21,
+            "stage": "5. Prepare for real opportunities",
+            "title": "Prepare your resume, portfolio and introduction",
+            "description": "Write a one-page student resume, organise your portfolio links, and practise a 30-second introduction explaining your interests, evidence and current goal.",
+            "completed": False,
+            "manual": True,
+        },
+        {
+            "id": 22,
+            "stage": "5. Prepare for real opportunities",
+            "title": "Create an application and deadline calendar",
+            "description": "Track exams, course applications, scholarships, recommendation letters, portfolio reviews and internships. Start important tasks several weeks before the deadline.",
+            "completed": False,
+            "manual": True,
         },
         {
             "id": 11,
+            "stage": "5. Prepare for real opportunities",
             "title": "Build a consistent weekly action habit",
             "description": f"You have completed {completed_weekly_goals} weekly career action{'s' if completed_weekly_goals != 1 else ''}. Complete three to establish your first action streak.",
             "completed": completed_weekly_goals >= 3,
+            "manual": False,
+        },
+        {
+            "id": 23,
+            "stage": "5. Prepare for real opportunities",
+            "title": "Review and update your direction monthly",
+            "description": "Once a month, review what you learned, update your quiz or RIASEC profile when needed, remove unsuitable options and choose the next three actions. Career plans are allowed to change.",
+            "completed": False,
+            "manual": True,
         },
     )
 
@@ -4404,7 +4530,7 @@ def career_report_data() -> dict[str, object]:
     roadmap: list[dict[str, object]] = []
     for step in automatic_roadmap_steps():
         clean_step = dict(step)
-        if roadmap_step_id(clean_step) in {8, 9, 10}:
+        if bool(clean_step.get("manual")):
             clean_step["completed"] = roadmap_step_id(clean_step) in manual_ids
         roadmap.append(clean_step)
     return {
@@ -5413,11 +5539,15 @@ def render_career_compare() -> None:
 
 
 def render_skill_roadmap() -> None:
-    st.markdown("<div class='top-title'>Your Learning Roadmap</div><div class='top-subtitle'>Your quiz progress updates this roadmap automatically.</div>", unsafe_allow_html=True)
+    st.markdown("<div class='top-title'>Your Learning Roadmap</div><div class='top-subtitle'>A complete path from self-discovery to skills, education planning and real-world preparation. Quiz milestones update automatically; practical actions stay under your control.</div>", unsafe_allow_html=True)
     steps = list(automatic_roadmap_steps())
-    # Quiz/profile milestones are automatic. These final actions need real
-    # student work, so they keep a saved manual completion control.
-    manual_step_ids = {8, 9, 10}
+    # Quiz/profile/weekly-goal milestones are automatic. Everything requiring
+    # real student work keeps a saved manual completion control.
+    manual_step_ids = {
+        roadmap_step_id(step)
+        for step in steps
+        if bool(step.get("manual")) and roadmap_step_id(step) is not None
+    }
     for step in steps:
         step_id = roadmap_step_id(step)
         if step_id in manual_step_ids:
@@ -5425,11 +5555,19 @@ def render_skill_roadmap() -> None:
     completed_count = sum(bool(step.get("completed", False)) for step in steps)
     progress = round(completed_count * 100 / len(steps))
     st.markdown(f"<div class='panel'><h3>{progress}% complete</h3><div class='progress-shell'><div class='progress-fill' style='width:{progress}%'></div></div><p class='muted'>{completed_count} of {len(steps)} steps completed. Quiz milestones update automatically; real-world actions can be marked when you finish them.</p></div>", unsafe_allow_html=True)
+    current_stage = ""
     for position, step in enumerate(steps, 1):
         step_id = roadmap_step_id(step)
         title = roadmap_step_title(step, position)
         description = str(step.get("description") or step.get("details") or "")
         completed = bool(step.get("completed", False))
+        stage = str(step.get("stage") or "Your next steps")
+        if stage != current_stage:
+            current_stage = stage
+            st.markdown(
+                f"<div style='margin:34px 0 12px'><h2>{escape(stage)}</h2></div>",
+                unsafe_allow_html=True,
+            )
         row, check = st.columns([5, 1])
         with row:
             state = "Completed automatically" if completed and step_id not in manual_step_ids else ("Completed" if completed else "Next step")
@@ -5447,7 +5585,7 @@ def render_skill_roadmap() -> None:
             else:
                 st.markdown(
                     "<div class='match-pill' style='text-align:center'>✓ Auto</div>" if completed
-                    else "<div class='match-pill' style='text-align:center'>Quiz needed</div>",
+                    else "<div class='match-pill' style='text-align:center'>Auto</div>",
                     unsafe_allow_html=True,
                 )
 
