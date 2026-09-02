@@ -2285,12 +2285,10 @@ def ollama_mentor_reply(question: str) -> tuple[str, str]:
 
 
 def gemini_mentor_reply(question: str) -> tuple[str, str]:
-    """Use Gemini through its OpenAI-compatible API when a Gemini key is set."""
+    """Use Google's native Gemini REST API when a Gemini key is set."""
     api_key = gemini_api_key()
     if not api_key:
         return "", "No Gemini key is configured."
-    if OpenAI is None:
-        return "", "The AI compatibility package is not installed yet."
 
     career_matches = ", ".join(career_suggestions()[:5]) or "Not available yet"
     profile_summary = {
@@ -2316,29 +2314,50 @@ def gemini_mentor_reply(question: str) -> tuple[str, str]:
         f"Student profile (background only):\n{json.dumps(profile_summary, ensure_ascii=False)}\n\n"
         f"Answer only this new question, not an earlier one: {question}"
     )
-    try:
-        client = OpenAI(
-            api_key=api_key,
-            base_url=GEMINI_OPENAI_BASE_URL,
-            timeout=30.0,
-            # Gemini occasionally returns a temporary 5xx InternalServerError.
-            # One SDK retry recovers from that without making the mentor hang
-            # through a long retry chain.
-            max_retries=1,
+    payload = json.dumps({
+        "system_instruction": {"parts": [{"text": instructions}]},
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {"maxOutputTokens": 1200, "temperature": 0.7},
+    }).encode("utf-8")
+
+    # A second stable model keeps the mentor available if the selected model
+    # has a temporary regional/service issue. Keep the configured model first.
+    models = []
+    for candidate in (gemini_model(), "gemini-2.5-flash"):
+        clean_model = candidate.strip()
+        if re.fullmatch(r"[A-Za-z0-9._-]+", clean_model) and clean_model not in models:
+            models.append(clean_model)
+
+    failures = []
+    for model_name in models:
+        request = Request(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent",
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "x-goog-api-key": api_key,
+            },
+            method="POST",
         )
-        response = client.chat.completions.create(
-            model=gemini_model(),
-            messages=[
-                {"role": "system", "content": instructions},
-                {"role": "user", "content": prompt},
-            ],
-        )
-        reply = str(response.choices[0].message.content or "").strip()
-        if not reply:
-            return "", "Gemini did not return a reply."
-        return reply, ""
-    except Exception as error:
-        return "", f"Gemini request failed ({error.__class__.__name__})."
+        try:
+            with urlopen(request, timeout=30) as response:
+                data = json.loads(response.read().decode("utf-8"))
+            candidates = data.get("candidates") or []
+            parts = ((candidates[0].get("content") or {}).get("parts") or []) if candidates else []
+            reply = "\n".join(str(part.get("text") or "") for part in parts).strip()
+            if reply:
+                return reply, ""
+            failures.append(f"{model_name}: empty response")
+        except HTTPError as error:
+            # Status only is safe for logs; never print the API key or request headers.
+            failures.append(f"{model_name}: HTTP {error.code}")
+        except (URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
+            failures.append(f"{model_name}: {error.__class__.__name__}")
+
+    if failures:
+        print("Gemini mentor request failed - " + "; ".join(failures))
+    return "", "Gemini could not answer right now."
 
 
 def gpt_mentor_reply(question: str) -> tuple[str, str]:
@@ -5249,7 +5268,7 @@ def render_dashboard() -> None:
 
 def render_ai_mentor() -> None:
     st.markdown("<div class='top-title'>AI Mentor</div><div class='top-subtitle'>Career and education guidance only.</div><div class='ai-card'><h3>Ask a career-focused question</h3><p>I can help with careers, skills, courses, universities, scholarships, and internships. For unrelated topics, I’ll politely guide you back.</p></div>", unsafe_allow_html=True)
-    using_gemini = bool(gemini_api_key() and OpenAI is not None)
+    using_gemini = bool(gemini_api_key())
     using_gpt = bool(openai_api_key() and OpenAI is not None)
     if using_gemini:
         st.caption(f"Gemini is ready to personalise career guidance using {gemini_model()}.")
