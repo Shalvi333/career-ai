@@ -2323,7 +2323,7 @@ def gemini_mentor_reply(question: str) -> tuple[str, str]:
     # A second stable model keeps the mentor available if the selected model
     # has a temporary regional/service issue. Keep the configured model first.
     models = []
-    for candidate in (gemini_model(), "gemini-2.5-flash"):
+    for candidate in (gemini_model(), "gemini-3.5-flash-lite"):
         clean_model = candidate.strip()
         if re.fullmatch(r"[A-Za-z0-9._-]+", clean_model) and clean_model not in models:
             models.append(clean_model)
