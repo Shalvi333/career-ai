@@ -2320,8 +2320,11 @@ def gemini_mentor_reply(question: str) -> tuple[str, str]:
         client = OpenAI(
             api_key=api_key,
             base_url=GEMINI_OPENAI_BASE_URL,
-            timeout=35.0,
-            max_retries=0,
+            timeout=30.0,
+            # Gemini occasionally returns a temporary 5xx InternalServerError.
+            # One SDK retry recovers from that without making the mentor hang
+            # through a long retry chain.
+            max_retries=1,
         )
         response = client.chat.completions.create(
             model=gemini_model(),
@@ -5256,11 +5259,19 @@ def render_ai_mentor() -> None:
         st.caption(f"Ollama model active: {ollama_model()}. If Ollama cannot answer, Career AI uses built-in guidance.")
 
     def ask_selected_model(new_question: str) -> tuple[str, str]:
-        # Use exactly one configured model. This avoids a slow chain of failed
-        # requests and prevents a depleted OpenAI account overriding Gemini.
+        # Prefer Gemini, but if its service has a temporary server error use
+        # the configured OpenAI provider before falling back to local text.
         with st.spinner("AI Mentor is thinking through your question..."):
             if using_gemini:
-                return gemini_mentor_reply(new_question)
+                reply, gemini_error = gemini_mentor_reply(new_question)
+                if reply:
+                    return reply, ""
+                if using_gpt:
+                    reply, gpt_error = gpt_mentor_reply(new_question)
+                    if reply:
+                        return reply, ""
+                    return "", f"{gemini_error} {gpt_error}".strip()
+                return "", gemini_error
             if using_gpt:
                 return gpt_mentor_reply(new_question)
             return ollama_mentor_reply(new_question)
@@ -5284,14 +5295,12 @@ def render_ai_mentor() -> None:
             reply, model_error = ask_selected_model(question.strip())
             if not reply:
                 reply = built_in_general_reply(question.strip())
-                reason = f" ({model_error})" if model_error else ""
-                source_note = f"This reply is using Career AI’s local guidance because the selected AI model did not respond{reason}."
+                source_note = "The AI service is temporarily unavailable, so Career AI provided an offline answer. You can try again shortly."
         else:
             reply, model_error = ask_selected_model(question.strip())
             if not reply:
                 reply = built_in_mentor_reply(question.strip())
-                reason = f" ({model_error})" if model_error else ""
-                source_note = f"This reply is using Career AI’s local guidance because the selected AI model did not respond{reason}."
+                source_note = "The AI service is temporarily unavailable, so Career AI provided an offline answer. You can try again shortly."
         if question.strip():
             is_greeting = is_friendly_mentor_message(question)
             if not is_greeting and mentor_reply_is_repeated(reply):
@@ -5309,8 +5318,13 @@ def render_ai_mentor() -> None:
     # Keep each question/reply together, but show the most recent exchange
     # first so students do not need to scroll down for the latest guidance.
     history = st.session_state.mentor_history
-    if st.session_state.get("mentor_last_source_note"):
-        st.caption(st.session_state.mentor_last_source_note)
+    source_note = str(st.session_state.get("mentor_last_source_note") or "")
+    if source_note:
+        # Older saved sessions may contain provider names and exception types.
+        # Keep those implementation details out of the student-facing chat.
+        if "local guidance because the selected AI model did not respond" in source_note:
+            source_note = "The AI service was temporarily unavailable, so Career AI provided an offline answer. You can try again shortly."
+        st.caption(source_note)
     exchanges = [history[position:position + 2] for position in range(0, len(history), 2)]
     for exchange in reversed(exchanges):
         for message in exchange:
