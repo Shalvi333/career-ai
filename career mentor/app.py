@@ -1214,6 +1214,45 @@ def make_session_token(student_id: str) -> str:
     return f"{encoded}.{signed}"
 
 
+def browser_session_bridge() -> None:
+    """Persist the signed session token in this browser across clean-link visits."""
+    try:
+        token = str(st.query_params.get("session", "")).strip()
+        forget = str(st.query_params.get("forget_session", "")) == "1"
+    except Exception:
+        token, forget = "", False
+    # The component stores only the signed, expiring token—not a password.
+    # document.referrer supplies the parent app URL without cross-origin reads.
+    script = f"""
+    <script>
+    (() => {{
+      const storageKey = "career_ai_device_session";
+      const suppliedToken = {json.dumps(token)};
+      const forget = {str(forget).lower()};
+      let parentUrl;
+      try {{ parentUrl = new URL(document.referrer); }} catch (_) {{ return; }}
+      if (forget) {{
+        localStorage.removeItem(storageKey);
+        parentUrl.searchParams.delete("session");
+        parentUrl.searchParams.delete("forget_session");
+        window.parent.location.replace(parentUrl.toString());
+        return;
+      }}
+      if (suppliedToken) {{
+        localStorage.setItem(storageKey, suppliedToken);
+        return;
+      }}
+      const remembered = localStorage.getItem(storageKey);
+      if (remembered) {{
+        parentUrl.searchParams.set("session", remembered);
+        window.parent.location.replace(parentUrl.toString());
+      }}
+    }})();
+    </script>
+    """
+    components.html(script, height=0, width=0)
+
+
 def restore_session_from_url() -> None:
     """Restore a remembered login after a refresh/browser back navigation."""
     if st.session_state.get("student_email"):
@@ -1353,7 +1392,8 @@ def log_out() -> None:
     st.session_state.light_mode = False
     st.session_state.nav_page = "Dashboard"
     try:
-        st.query_params.pop("session", None)
+        st.query_params.clear()
+        st.query_params["forget_session"] = "1"
     except Exception:
         pass
 
@@ -3671,7 +3711,12 @@ def render_login() -> None:
             password = st.text_input("Password", placeholder="Enter your password", type="password", key="password_input")
             if creating_account:
                 st.caption("Create your own password.")
-            remember_me = st.checkbox("Remember me", key="remember_me_input")
+            remember_me = st.checkbox(
+                "Remember me on this device",
+                value=True,
+                key="remember_me_input",
+                help="Keeps you signed in on this browser for up to 30 days. Log out to remove it.",
+            )
             submit_label = "Create account  →" if creating_account else "Log in  →"
             submitted = st.form_submit_button(submit_label, use_container_width=True)
         if submitted:
@@ -3715,7 +3760,8 @@ def render_login() -> None:
                             pass
                     else:
                         try:
-                            st.query_params.pop("session", None)
+                            st.query_params.clear()
+                            st.query_params["forget_session"] = "1"
                         except Exception:
                             pass
                     save_current_student_state()
@@ -6059,6 +6105,7 @@ def render_app() -> None:
 
 def main() -> None:
     init_state()
+    browser_session_bridge()
     restore_session_from_url()
     inject_styles()
     stage = st.session_state.app_stage
