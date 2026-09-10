@@ -1180,7 +1180,7 @@ THEMES = {
 
 
 def init_state() -> None:
-    defaults = {"app_stage":"login", "auth_mode":"login", "light_mode":False, "nav_page":"Dashboard", "student_name":"", "student_email":"", "quiz_name":"", "intake_mode":None, "intake_index":0, "intake_answers":{}, "personality_mode":None, "personality_index":0, "personality_answers":{}, "personality_complete":False, "backend_profile":None, "backend_error":"", "top_matches":[], "career_insights":{}, "score_error":"", "local_roadmap_completed":set(), "mentor_history":[], "career_journal":{"version":1, "currentPage":0, "pages":[]}, "journal_last_save_token":"", "journal_reminder_checked":False, "weekly_goals":[], "weekly_reminder_checked":False, "feedback_entries":[], "saved_careers":[], "account_recovery":{}, "auth_recovery_mode":False, "accessibility_large_text":False, "accessibility_high_contrast":False, "accessibility_reduce_motion":False}
+    defaults = {"app_stage":"login", "auth_mode":"login", "light_mode":False, "nav_page":"Dashboard", "student_name":"", "student_email":"", "quiz_name":"", "intake_mode":None, "intake_index":0, "intake_answers":{}, "personality_mode":None, "personality_index":0, "personality_answers":{}, "personality_complete":False, "backend_profile":None, "backend_error":"", "top_matches":[], "career_insights":{}, "score_error":"", "gemini_quiz_status":"", "local_roadmap_completed":set(), "mentor_history":[], "career_journal":{"version":1, "currentPage":0, "pages":[]}, "journal_last_save_token":"", "journal_reminder_checked":False, "weekly_goals":[], "weekly_reminder_checked":False, "feedback_entries":[], "saved_careers":[], "account_recovery":{}, "auth_recovery_mode":False, "accessibility_large_text":False, "accessibility_high_contrast":False, "accessibility_reduce_motion":False}
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
     # Migrate profiles saved before this page was renamed.
@@ -2308,7 +2308,7 @@ def _gemini_json(prompt: str, system_instruction: str, max_tokens: int = 900) ->
         "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.1, "responseMimeType": "application/json"},
     }).encode("utf-8")
     models: list[str] = []
-    for candidate in (gemini_model(), "gemini-3.5-flash-lite"):
+    for candidate in (gemini_model(), "gemini-3.5-flash"):
         clean_model = candidate.strip()
         if re.fullmatch(r"[A-Za-z0-9._-]+", clean_model) and clean_model not in models:
             models.append(clean_model)
@@ -2340,7 +2340,11 @@ def _gemini_json(prompt: str, system_instruction: str, max_tokens: int = 900) ->
 
 def gemini_enhance_career_matches(candidates: tuple[dict[str, object], ...]) -> tuple[list[dict[str, object]], list[str]]:
     """Rerank known careers using the profile; never accept invented roles."""
-    if not gemini_api_key() or not candidates:
+    if not gemini_api_key():
+        st.session_state.gemini_quiz_status = "not_configured"
+        return [], []
+    if not candidates:
+        st.session_state.gemini_quiz_status = "no_candidates"
         return [], []
     allowed = [match_title(item) for item in candidates]
     ai_safe_sections = CAREER_SIGNAL_SECTIONS | {"University & location preferences", "Learning style"}
@@ -2374,6 +2378,7 @@ def gemini_enhance_career_matches(candidates: tuple[dict[str, object], ...]) -> 
         max_tokens=1000,
     )
     if not isinstance(result, dict) or not isinstance(result.get("matches"), list):
+        st.session_state.gemini_quiz_status = "failed"
         return [], []
     by_name = {match_title(item): dict(item) for item in candidates}
     enhanced: list[dict[str, object]] = []
@@ -2395,9 +2400,11 @@ def gemini_enhance_career_matches(candidates: tuple[dict[str, object], ...]) -> 
         enhanced.append(merged)
         seen.add(name)
     if set(allowed) != seen:
+        st.session_state.gemini_quiz_status = "invalid_response"
         return [], []
     enhanced.sort(key=lambda item: float(item.get("score", 0)), reverse=True)
     insights = [str(item).strip() for item in result.get("insights", []) if str(item).strip()][:4]
+    st.session_state.gemini_quiz_status = "enhanced"
     return enhanced, insights
 
 
@@ -2440,7 +2447,7 @@ def gemini_mentor_reply(question: str) -> tuple[str, str]:
     # A second stable model keeps the mentor available if the selected model
     # has a temporary regional/service issue. Keep the configured model first.
     models = []
-    for candidate in (gemini_model(), "gemini-3.5-flash-lite"):
+    for candidate in (gemini_model(), "gemini-3.5-flash"):
         clean_model = candidate.strip()
         if re.fullmatch(r"[A-Za-z0-9._-]+", clean_model) and clean_model not in models:
             models.append(clean_model)
@@ -3789,6 +3796,13 @@ def render_intake_results() -> None:
     first_matches = relevant_career_results()[:3]
     first_careers = ", ".join(match_title(match) for match in first_matches)
     st.markdown("<div class='top-title'>Your Career Profile is Ready</div><div class='top-subtitle'>Your recommendations below are already based on the answers you wrote. The RIASEC quiz is optional and only refines them further.</div>", unsafe_allow_html=True)
+    gemini_status = st.session_state.get("gemini_quiz_status", "")
+    if gemini_status == "enhanced":
+        st.success("✦ Gemini checked your completed profile and refined these career matches.")
+    elif gemini_status in {"failed", "invalid_response"}:
+        st.warning("Gemini could not refine this attempt, so your reliable local career matches are shown instead.")
+    elif gemini_status == "not_configured":
+        st.info("Add GEMINI_API_KEY in Streamlit Secrets to enable AI-refined quiz results.")
     stat1, stat2, stat3 = st.columns(3)
     for col, icon, number, label in ((stat1, "🦋", f"{answered}/{total}", "Questions answered"), (stat2, "🧭", "Career profile", "Saved in this session"), (stat3, "🧠", "Next: personality", "Refine your matches")):
         with col: st.markdown(f"<div class='panel' style='text-align:center'><div class='icon-bubble' style='margin:auto'>{icon}</div><div class='result-number'>{number}</div><p class='muted'>{label}</p></div>", unsafe_allow_html=True)
@@ -3887,6 +3901,13 @@ def render_personality_results() -> None:
     max_score = 10 if st.session_state.personality_mode == "riasec_short" else 50
     summary_title = "Your Quick RIASEC Career Profile" if st.session_state.personality_mode == "riasec_short" else "Your RIASEC Career Profile"
     st.markdown(f"<div class='top-title'>{summary_title}</div><div class='top-subtitle'>Your strongest themes point to work environments and career families that may feel naturally engaging.</div>", unsafe_allow_html=True)
+    gemini_status = st.session_state.get("gemini_quiz_status", "")
+    if gemini_status == "enhanced":
+        st.success("✦ Gemini combined your written answers with your RIASEC profile to refine these results.")
+    elif gemini_status in {"failed", "invalid_response"}:
+        st.warning("Gemini could not refine this attempt, so your deterministic RIASEC results are shown instead.")
+    elif gemini_status == "not_configured":
+        st.info("Add GEMINI_API_KEY in Streamlit Secrets to connect Gemini to these RIASEC results.")
     saved_profile = st.session_state.backend_profile or {}
     if not saved_profile.get("student_id") and st.session_state.backend_error and not backend_unavailable(st.session_state.backend_error):
         st.warning(f"Your on-screen summary is ready, but it was not saved to the backend. {st.session_state.backend_error}")
