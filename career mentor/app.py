@@ -2331,16 +2331,33 @@ def gemini_enhance_career_matches(candidates: tuple[dict[str, object], ...]) -> 
         return [], []
     allowed = [match_title(item) for item in candidates]
     ai_safe_sections = CAREER_SIGNAL_SECTIONS | {"University & location preferences", "Learning style"}
+    riasec_profile: dict[str, object] = {}
+    if st.session_state.personality_complete:
+        raw_scores = riasec_scores()
+        saved_scores = (st.session_state.backend_profile or {}).get("riasec_scores", {})
+        # FastAPI normalizes every RIASEC dimension to 0–10. The local full
+        # quiz totals ten 1–5 ratings per dimension and therefore uses 0–50.
+        maximum = 10 if isinstance(saved_scores, dict) and all(code in saved_scores for code in RIASEC) else (10 if st.session_state.personality_mode == "riasec_short" else 50)
+        ranked_codes = sorted(raw_scores, key=raw_scores.get, reverse=True)
+        riasec_profile = {
+            "holland_code": "".join(ranked_codes[:2]),
+            "strongest_themes": [RIASEC[code][0] for code in ranked_codes[:3]],
+            "scores_percent": {
+                RIASEC[code][0]: round(float(raw_scores[code]) * 100 / maximum)
+                for code in RIASEC
+            },
+            "quiz_version": "quick" if maximum == 10 else "full",
+        }
     profile = {
         # Exclude identity, health/support and financial answers from the AI
         # request; local logic still retains and uses the complete profile.
         "quiz_answers": [item for item in labelled_quiz_answers() if item.get("section") in ai_safe_sections],
-        "riasec_scores": riasec_scores() if st.session_state.personality_complete else {},
+        "riasec_profile": riasec_profile,
         "candidate_careers": [{"career": match_title(item), "base_score": item.get("score"), "base_reason": item.get("reason", "")} for item in candidates],
     }
     result, _error = _gemini_json(
         json.dumps(profile, ensure_ascii=False),
-        "Improve career recommendations for a student. Rerank only the supplied candidate careers; do not add or rename careers. Treat RIASEC scores and explicit interests as strong evidence, and constraints or dislikes as reasons to lower a match. Scores are exploration indicators, not guarantees. Return JSON only: {\"matches\":[{\"career\":string,\"score\":integer 55-95,\"reason\":string}],\"insights\":[string,string,string]}. Include every supplied career exactly once.",
+        "Improve career recommendations for a student. Rerank only the supplied candidate careers; do not add or rename careers. When riasec_profile is present, use its Holland code, strongest themes, and normalized percentages as the primary career-fit evidence, then use explicit written interests to refine the order. Mention the relevant RIASEC theme in each reason where it genuinely supports the match. Use constraints or dislikes to lower a match. Scores are exploration indicators, not guarantees. Return JSON only: {\"matches\":[{\"career\":string,\"score\":integer 55-95,\"reason\":string}],\"insights\":[string,string,string]}. Include every supplied career exactly once.",
         max_tokens=1000,
     )
     if not isinstance(result, dict) or not isinstance(result.get("matches"), list):
