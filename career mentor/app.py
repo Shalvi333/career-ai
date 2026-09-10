@@ -17,6 +17,7 @@ import os
 import random
 import re
 import secrets
+import ssl
 import sys
 import time
 from datetime import date, datetime, timedelta, timezone
@@ -27,6 +28,7 @@ from urllib.request import Request, urlopen
 
 import streamlit as st
 import streamlit.components.v1 as components
+import certifi
 
 # The root app.py launches this file with runpy. Include this folder on the
 # import path so database.py can be imported both locally and on Streamlit.
@@ -87,7 +89,7 @@ DEFAULT_ROADMAP_API_URL = "http://127.0.0.1:8000/roadmap"
 DEFAULT_SCORE_API_URL = "http://127.0.0.1:8000/score"
 DEFAULT_AUTH_API_URL = "http://127.0.0.1:8000/auth"
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
-DEFAULT_GEMINI_MODEL = "gemini-3.6-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
 GEMINI_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
 DEFAULT_OLLAMA_MODEL = "llama3.2"
@@ -2331,7 +2333,7 @@ def _gemini_json(prompt: str, system_instruction: str, max_tokens: int = 900) ->
             method="POST",
         )
         try:
-            with urlopen(request, timeout=25) as response:
+            with urlopen(request, timeout=25, context=ssl.create_default_context(cafile=certifi.where())) as response:
                 data = json.loads(response.read().decode("utf-8"))
             candidates = data.get("candidates") or []
             parts = ((candidates[0].get("content") or {}).get("parts") or []) if candidates else []
@@ -2475,7 +2477,7 @@ def gemini_mentor_reply(question: str) -> tuple[str, str]:
             method="POST",
         )
         try:
-            with urlopen(request, timeout=30) as response:
+            with urlopen(request, timeout=30, context=ssl.create_default_context(cafile=certifi.where())) as response:
                 data = json.loads(response.read().decode("utf-8"))
             candidates = data.get("candidates") or []
             parts = ((candidates[0].get("content") or {}).get("parts") or []) if candidates else []
