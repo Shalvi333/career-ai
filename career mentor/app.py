@@ -2430,16 +2430,18 @@ def gemini_validate_quiz_answer(section: str, question: str, answer: str) -> tup
     return False, message or "Please revise this answer so it directly addresses the question."
 
 
-def gemini_enhance_career_matches(candidates: tuple[dict[str, object], ...]) -> tuple[list[dict[str, object]], list[str]]:
+def gemini_enhance_career_matches(candidates: tuple[dict[str, object], ...]) -> tuple[list[dict[str, object]], list[str], dict[str, list[dict[str, str]]]]:
     """Rerank known careers using the profile; never accept invented roles."""
     if not gemini_api_key():
         st.session_state.gemini_quiz_status = "not_configured"
-        return [], []
+        return [], [], {}
     if not candidates:
         st.session_state.gemini_quiz_status = "no_candidates"
-        return [], []
+        return [], [], {}
     allowed = [match_title(item) for item in candidates]
     ai_safe_sections = CAREER_SIGNAL_SECTIONS | {"University & location preferences", "Learning style"}
+    university_candidates = list(university_recommendations())
+    scholarship_candidates = list(recommended_scholarships())
     riasec_profile: dict[str, object] = {}
     if st.session_state.personality_complete:
         raw_scores = riasec_scores()
@@ -2463,15 +2465,23 @@ def gemini_enhance_career_matches(candidates: tuple[dict[str, object], ...]) -> 
         "quiz_answers": [item for item in labelled_quiz_answers() if item.get("section") in ai_safe_sections],
         "riasec_profile": riasec_profile,
         "candidate_careers": [{"career": match_title(item), "base_score": item.get("score"), "base_reason": item.get("reason", "")} for item in candidates],
+        "candidate_universities": [
+            {"name": item["name"], "country": item["country"], "field": item["field"]}
+            for item in university_candidates
+        ],
+        "candidate_scholarships": [
+            {"name": item["name"], "best_for": item["best_for"]}
+            for item in scholarship_candidates
+        ],
     }
     result, _error = _gemini_json(
         json.dumps(profile, ensure_ascii=False),
-        "Improve career recommendations for a student. Rerank only the supplied candidate careers; do not add or rename careers. When riasec_profile is present, use its Holland code, strongest themes, and normalized percentages as the primary career-fit evidence, then use explicit written interests to refine the order. Mention the relevant RIASEC theme in each reason where it genuinely supports the match. Use constraints or dislikes to lower a match. Scores are exploration indicators, not guarantees. Return JSON only: {\"matches\":[{\"career\":string,\"score\":integer 55-95,\"reason\":string}],\"insights\":[string,string,string]}. Keep reasons concise so the response completes quickly.",
-        max_tokens=1400,
+        "Improve education and career recommendations for a student. Rerank only the supplied careers, universities, and scholarships; never add or rename an item. Use the Holland code, RIASEC percentages, written interests, academic direction, preferred country, learning preferences, and constraints. RIASEC and explicit interests are the primary career-fit evidence. University field and country must fit the student's direction and preferences. Scholarships must plausibly fit their subject, destination, and stated needs, but never promise eligibility. Return JSON only: {\"matches\":[{\"career\":string,\"score\":integer 55-95,\"reason\":string}],\"universities\":[\"exact supplied university name\"],\"scholarships\":[\"exact supplied scholarship name\"],\"insights\":[string,string,string]}. Keep reasons concise.",
+        max_tokens=1800,
     )
     if not isinstance(result, dict) or not isinstance(result.get("matches"), list):
         st.session_state.gemini_quiz_status = "failed"
-        return [], []
+        return [], [], {}
     by_name = {match_title(item): dict(item) for item in candidates}
     enhanced: list[dict[str, object]] = []
     seen: set[str] = set()
@@ -2499,11 +2509,30 @@ def gemini_enhance_career_matches(candidates: tuple[dict[str, object], ...]) -> 
             enhanced.append(by_name[name])
     if not seen:
         st.session_state.gemini_quiz_status = "invalid_response"
-        return [], []
+        return [], [], {}
     enhanced.sort(key=lambda item: float(item.get("score", 0)), reverse=True)
     insights = [str(item).strip() for item in result.get("insights", []) if str(item).strip()][:4]
+    university_by_name = {item["name"]: item for item in university_candidates}
+    scholarship_by_name = {item["name"]: item for item in scholarship_candidates}
+    ai_universities = [
+        university_by_name[name] for name in result.get("universities", [])
+        if isinstance(name, str) and name in university_by_name
+    ]
+    ai_scholarships = [
+        scholarship_by_name[name] for name in result.get("scholarships", [])
+        if isinstance(name, str) and name in scholarship_by_name
+    ]
+    for item in university_candidates:
+        if item not in ai_universities:
+            ai_universities.append(item)
+    for item in scholarship_candidates:
+        if item not in ai_scholarships:
+            ai_scholarships.append(item)
     st.session_state.gemini_quiz_status = "enhanced"
-    return enhanced, insights
+    return enhanced, insights, {
+        "universities": ai_universities[:3],
+        "scholarships": ai_scholarships[:5],
+    }
 
 
 def gemini_mentor_reply(question: str) -> tuple[str, str]:
@@ -3267,6 +3296,10 @@ def automatic_roadmap_steps() -> tuple[dict[str, object], ...]:
 
 def university_recommendations(extra_context: str = "") -> tuple[dict[str, str], ...]:
     """Match universities to quiz interests, with optional mentor-question context."""
+    if not extra_context and isinstance(st.session_state.get("career_insights"), dict):
+        ai_ranked = st.session_state.career_insights.get("ai_universities", [])
+        if isinstance(ai_ranked, list) and ai_ranked:
+            return tuple(item for item in ai_ranked if isinstance(item, dict))[:3]
     ranked = active_theme_ranking()
     # Keep the ranking order: using a set here made equally rated themes appear
     # in an unpredictable order and led to the same three default suggestions.
@@ -3375,6 +3408,10 @@ def recommended_scholarships(extra_context: str = "") -> tuple[dict[str, str], .
     funding *routes*, then show named public programmes only when their stated
     eligibility matches the student's country or subject.
     """
+    if not extra_context and isinstance(st.session_state.get("career_insights"), dict):
+        ai_ranked = st.session_state.career_insights.get("ai_scholarships", [])
+        if isinstance(ai_ranked, list) and ai_ranked:
+            return tuple(item for item in ai_ranked if isinstance(item, dict))[:5]
     # Do not use old dashboard career cards as evidence here: they can belong
     # to an earlier attempt. The current written-interest answers are the
     # source of truth for a fresh recommendation.
@@ -3918,9 +3955,14 @@ def render_intake() -> None:
         st.session_state.intake_answers[key] = answer.strip()
         if index == len(questions) - 1:
             with st.spinner("SKS AI is refining your first career matches…"):
-                ai_matches, ai_insights = gemini_enhance_career_matches(relevant_career_results())
+                ai_matches, ai_insights, ai_education = gemini_enhance_career_matches(relevant_career_results())
             if ai_matches:
-                st.session_state.career_insights = {"ai_matches": ai_matches, "insights": ai_insights}
+                st.session_state.career_insights = {
+                    "ai_matches": ai_matches,
+                    "insights": ai_insights,
+                    "ai_universities": ai_education.get("universities", []),
+                    "ai_scholarships": ai_education.get("scholarships", []),
+                }
             st.session_state.app_stage = "intake_results"
         else:
             st.session_state.intake_index += 1
@@ -3937,7 +3979,7 @@ def render_intake_results() -> None:
     st.markdown("<div class='top-title'>Your Career Profile is Ready</div><div class='top-subtitle'>Your recommendations below are already based on the answers you wrote. The RIASEC quiz is optional and only refines them further.</div>", unsafe_allow_html=True)
     gemini_status = st.session_state.get("gemini_quiz_status", "")
     if gemini_status == "enhanced":
-        st.success("✦ SKS AI checked your completed profile and refined these career matches.")
+        st.success("✦ SKS AI refined your career, university, and scholarship matches from the completed profile.")
     elif gemini_status in {"failed", "invalid_response"}:
         st.warning("SKS AI could not refine this attempt, so your reliable local career matches are shown instead.")
     elif gemini_status == "not_configured":
@@ -4018,11 +4060,13 @@ def render_personality() -> None:
                 st.session_state.career_insights = insights
                 st.session_state.score_error = score_error
             with st.spinner("SKS AI is refining your career matches…"):
-                ai_matches, ai_insights = gemini_enhance_career_matches(relevant_career_results())
+                ai_matches, ai_insights, ai_education = gemini_enhance_career_matches(relevant_career_results())
             if ai_matches:
                 combined_insights = dict(st.session_state.career_insights) if isinstance(st.session_state.career_insights, dict) else {}
                 combined_insights["ai_matches"] = ai_matches
                 combined_insights["insights"] = ai_insights
+                combined_insights["ai_universities"] = ai_education.get("universities", [])
+                combined_insights["ai_scholarships"] = ai_education.get("scholarships", [])
                 st.session_state.career_insights = combined_insights
             st.session_state.app_stage = "personality_results"
         else:
@@ -4043,7 +4087,7 @@ def render_personality_results() -> None:
     st.markdown(f"<div class='top-title'>{summary_title}</div><div class='top-subtitle'>Your strongest themes point to work environments and career families that may feel naturally engaging.</div>", unsafe_allow_html=True)
     gemini_status = st.session_state.get("gemini_quiz_status", "")
     if gemini_status == "enhanced":
-        st.success("✦ SKS AI combined your written answers with your RIASEC profile to refine these results.")
+        st.success("✦ SKS AI combined your written answers and RIASEC profile to refine careers, universities, and scholarships.")
     elif gemini_status in {"failed", "invalid_response"}:
         st.warning("SKS AI could not refine this attempt, so your deterministic RIASEC results are shown instead.")
     elif gemini_status == "not_configured":
