@@ -1180,7 +1180,7 @@ THEMES = {
 
 
 def init_state() -> None:
-    defaults = {"app_stage":"login", "auth_mode":"login", "light_mode":False, "nav_page":"Dashboard", "student_name":"", "student_email":"", "quiz_name":"", "intake_mode":None, "intake_index":0, "intake_answers":{}, "personality_mode":None, "personality_index":0, "personality_answers":{}, "personality_complete":False, "backend_profile":None, "backend_error":"", "top_matches":[], "career_insights":{}, "score_error":"", "gemini_quiz_status":"", "local_roadmap_completed":set(), "mentor_history":[], "career_journal":{"version":1, "currentPage":0, "pages":[]}, "journal_last_save_token":"", "journal_reminder_checked":False, "weekly_goals":[], "weekly_reminder_checked":False, "feedback_entries":[], "saved_careers":[], "account_recovery":{}, "auth_recovery_mode":False, "accessibility_large_text":False, "accessibility_high_contrast":False, "accessibility_reduce_motion":False}
+    defaults = {"app_stage":"login", "auth_mode":"login", "light_mode":False, "nav_page":"Dashboard", "student_name":"", "student_email":"", "quiz_name":"", "intake_mode":None, "intake_index":0, "intake_answers":{}, "personality_mode":None, "personality_index":0, "personality_answers":{}, "personality_complete":False, "backend_profile":None, "backend_error":"", "top_matches":[], "career_insights":{}, "score_error":"", "gemini_quiz_status":"", "local_roadmap_completed":set(), "mentor_history":[], "career_journal":{"version":1, "currentPage":0, "pages":[]}, "journal_last_save_token":"", "journal_reminder_checked":False, "weekly_goals":[], "weekly_reminder_checked":False, "feedback_entries":[], "saved_careers":[], "saved_universities":[], "saved_scholarships":[], "account_recovery":{}, "auth_recovery_mode":False, "accessibility_large_text":False, "accessibility_high_contrast":False, "accessibility_reduce_motion":False}
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
     # Migrate profiles saved before this page was renamed.
@@ -1250,7 +1250,8 @@ PERSISTED_PROFILE_KEYS = (
     "personality_index", "personality_answers", "personality_complete",
     "top_matches", "career_insights", "score_error", "mentor_history",
     "nav_page", "local_roadmap_completed", "career_journal", "weekly_goals",
-    "feedback_entries", "saved_careers", "account_recovery",
+    "feedback_entries", "saved_careers", "saved_universities",
+    "saved_scholarships", "account_recovery",
     "accessibility_large_text", "accessibility_high_contrast",
     "accessibility_reduce_motion",
 )
@@ -1307,6 +1308,10 @@ def restore_student_state(account: dict[str, object]) -> None:
     st.session_state.saved_careers = list(dict.fromkeys(
         str(title) for title in st.session_state.get("saved_careers", []) if str(title).strip()
     ))
+    for collection in ("saved_universities", "saved_scholarships"):
+        st.session_state[collection] = list(dict.fromkeys(
+            str(title) for title in st.session_state.get(collection, []) if str(title).strip()
+        ))
     # Check once after each fresh login/browser-session restore. This value is
     # deliberately not persisted, so dismissing a reminder never changes the
     # student's journal or permanently disables future reminders.
@@ -2576,6 +2581,21 @@ def match_score(match: dict[str, object]) -> str:
         return f"{number:.0f}%" if number <= 100 else f"{number:.0f}"
     except (TypeError, ValueError):
         return str(score)
+
+
+def render_favorite_toggle(title: str, collection: str, icon: str = "★") -> None:
+    """Render a one-click save/remove control and persist it immediately."""
+    saved = list(st.session_state.get(collection, []))
+    is_saved = title in saved
+    safe_key = hashlib.sha256(f"{collection}:{title}".encode("utf-8")).hexdigest()[:14]
+    label = f"{icon} Saved — click to remove" if is_saved else f"{icon} Save"
+    if st.button(label, key=f"favorite_{safe_key}", use_container_width=True, type="primary" if is_saved else "secondary"):
+        if is_saved:
+            st.session_state[collection] = [item for item in saved if item != title]
+        else:
+            st.session_state[collection] = [*saved, title]
+        save_current_student_state()
+        st.rerun()
 
 
 def send_chat_to_backend(student_id: str, message: str) -> tuple[str, str]:
@@ -5537,14 +5557,9 @@ def render_explore_careers() -> None:
     saved_careers = list(st.session_state.get("saved_careers", []))
     with st.expander(f"★ My saved careers ({len(saved_careers)})", expanded=bool(saved_careers)):
         if not saved_careers:
-            st.caption("Save interesting careers from any results page to build your shortlist.")
+            st.caption("Tap ★ Save on any career card to build your shortlist.")
         else:
             st.write(" · ".join(saved_careers))
-            remove_saved = st.multiselect("Remove from saved careers", saved_careers, key="remove_saved_careers")
-            if st.button("Remove selected", disabled=not remove_saved, key="remove_saved_careers_button"):
-                st.session_state.saved_careers = [title for title in saved_careers if title not in remove_saved]
-                save_current_student_state()
-                st.rerun()
     st.button(
         "Compare 2–3 careers →",
         key="explore_open_career_compare",
@@ -5616,26 +5631,19 @@ def render_explore_careers() -> None:
     page_start = (page_number - 1) * page_size
     visible_jobs = filtered[page_start:page_start + page_size]
     st.caption(f"Showing careers {page_start + 1}–{page_start + len(visible_jobs)} of {len(filtered)}")
-    cards = []
-    for job, group in visible_jobs:
-        backend_job = backend_by_name.get(job, {})
-        description = career_description(backend_job) if backend_job else f"{group} · Explore required skills, courses, and opportunities."
-        cards.append(
-            f"<div class='match-card'><span class='match-pill'>{escape(group)}</span><div class='icon-bubble butterfly-mark'>🦋</div>"
-            f"<h3>{escape(job)}</h3><p class='muted'>{escape(description)}</p></div>"
-        )
-    st.markdown("<div class='match-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
-    titles_on_page = [job for job, _ in visible_jobs]
-    add_saved = st.multiselect(
-        "Save careers from this page",
-        [title for title in titles_on_page if title not in saved_careers],
-        key=f"save_careers_{category}_{query}_{page_number}",
-    )
-    if st.button("★ Save selected careers", disabled=not add_saved, use_container_width=True):
-        st.session_state.saved_careers = list(dict.fromkeys([*saved_careers, *add_saved]))
-        save_current_student_state()
-        st.success("Saved to your career shortlist.")
-        st.rerun()
+    for row_start in range(0, len(visible_jobs), 3):
+        columns = st.columns(3, gap="large")
+        for column, (job, group) in zip(columns, visible_jobs[row_start:row_start + 3]):
+            backend_job = backend_by_name.get(job, {})
+            description = career_description(backend_job) if backend_job else f"{group} · Explore required skills, courses, and opportunities."
+            with column:
+                with st.container(border=True):
+                    st.markdown(
+                        f"<span class='match-pill'>{escape(group)}</span><div class='icon-bubble butterfly-mark'>🦋</div>"
+                        f"<h3>{escape(job)}</h3><p class='muted'>{escape(description)}</p>",
+                        unsafe_allow_html=True,
+                    )
+                    render_favorite_toggle(job, "saved_careers", "★")
 
 
 def suggested_comparison_careers() -> tuple[str, ...]:
@@ -5829,6 +5837,7 @@ def render_universities() -> None:
                         f"<h3>{escape(item['name'])}</h3><p class='muted'>{escape(detail)}</p></div>",
                         unsafe_allow_html=True,
                     )
+                    render_favorite_toggle(str(item["name"]), "saved_universities", "♥")
                     st.link_button(
                         "Open university website ↗",
                         item["website"] or university_website(item["name"]),
@@ -5844,6 +5853,7 @@ def render_universities() -> None:
         for column, university in zip(recommendation_columns, recommended):
             with column:
                 st.markdown(f"<div class='match-card'><span class='match-pill'>For you</span><div class='icon-bubble'>🎓</div><h3>{escape(university['name'])}</h3><p class='muted'><b>{escape(university['field'])}</b><br>{escape(university['country'])}<br><span class='mint'>{escape(university['scholarships'])}</span></p></div>", unsafe_allow_html=True)
+                render_favorite_toggle(university["name"], "saved_universities", "♥")
                 st.link_button("Open university website ↗", university_website(university["name"]), use_container_width=True)
     st.markdown("<h2 style='margin-top:28px'>Browse all curated universities</h2>", unsafe_allow_html=True)
     fields = tuple(sorted({university["field"] for university in UNIVERSITY_CATALOG}))
@@ -5871,18 +5881,24 @@ def render_universities() -> None:
         for column, university in zip(columns, row):
             with column:
                 st.markdown(f"<div class='match-card'><span class='match-pill'>{escape(university['country'])}</span><div class='icon-bubble'>🎓</div><h3>{escape(university['name'])}</h3><p class='muted'><b>{escape(university['field'])}</b><br>{escape(university['reputation'])}<br><span class='mint'>{escape(university['scholarships'])}</span></p></div>", unsafe_allow_html=True)
+                render_favorite_toggle(university["name"], "saved_universities", "♥")
                 st.link_button("Open university website ↗", university_website(university["name"]), use_container_width=True, key=f"university_link_{row_start}_{university['name']}")
 
 
 def render_scholarships() -> None:
     st.markdown("<div class='top-title'>Scholarships</div><div class='top-subtitle'>Major funding opportunities for Indian students and international study pathways.</div>", unsafe_allow_html=True)
     recommended = recommended_scholarships()
-    recommended_cards = "".join(
-        f"<div class='match-card'><span class='match-pill'>For you</span><div class='icon-bubble butterfly-mark'>🦋</div><h3>{escape(item['name'])}</h3>"
-        f"<p class='muted'><b>Coverage:</b> {escape(item['coverage'])}<br><span class='mint'>{escape(item['best_for'])}</span></p></div>"
-        for item in recommended
-    )
-    st.markdown("<div class='panel'><h3>🦋 Recommended for your current career direction</h3><p class='muted'>Matched using your strongest quiz themes and career results. Always confirm eligibility and deadlines on the official provider website.</p><div class='match-grid'>" + recommended_cards + "</div></div>", unsafe_allow_html=True)
+    st.markdown("<h3>🦋 Recommended for your current career direction</h3><p class='muted'>Matched using your strongest quiz themes and career results. Always confirm eligibility and deadlines on the official provider website.</p>", unsafe_allow_html=True)
+    recommendation_columns = st.columns(3, gap="large")
+    for column, item in zip(recommendation_columns, recommended):
+        with column:
+            with st.container(border=True):
+                st.markdown(
+                    f"<span class='match-pill'>For you</span><div class='icon-bubble butterfly-mark'>🦋</div><h3>{escape(item['name'])}</h3>"
+                    f"<p class='muted'><b>Coverage:</b> {escape(item['coverage'])}<br><span class='mint'>{escape(item['best_for'])}</span></p>",
+                    unsafe_allow_html=True,
+                )
+                render_favorite_toggle(item["name"], "saved_scholarships", "♥")
     st.markdown("<h2 style='margin-top:28px'>Browse all scholarships</h2>", unsafe_allow_html=True)
     query = st.text_input("Search scholarships", placeholder="Try UK, STEM, master's, India…").strip().lower()
     filtered = [
@@ -5893,12 +5909,17 @@ def render_scholarships() -> None:
     if not filtered:
         st.info("No scholarships match that search.")
         return
-    cards = "".join(
-        f"<div class='match-card'><div class='icon-bubble butterfly-mark'>🦋</div><h3>{escape(item['name'])}</h3>"
-        f"<p class='muted'><b>Funded by:</b> {escape(item['funded_by'])}<br><b>Coverage:</b> {escape(item['coverage'])}<br><span class='mint'>{escape(item['best_for'])}</span></p></div>"
-        for item in filtered
-    )
-    st.markdown("<div class='match-grid'>" + cards + "</div>", unsafe_allow_html=True)
+    for row_start in range(0, len(filtered), 3):
+        columns = st.columns(3, gap="large")
+        for column, item in zip(columns, filtered[row_start:row_start + 3]):
+            with column:
+                with st.container(border=True):
+                    st.markdown(
+                        f"<div class='icon-bubble butterfly-mark'>🦋</div><h3>{escape(item['name'])}</h3>"
+                        f"<p class='muted'><b>Funded by:</b> {escape(item['funded_by'])}<br><b>Coverage:</b> {escape(item['coverage'])}<br><span class='mint'>{escape(item['best_for'])}</span></p>",
+                        unsafe_allow_html=True,
+                    )
+                    render_favorite_toggle(item["name"], "saved_scholarships", "♥")
 
 
 def render_simple_page(page: str) -> None:
