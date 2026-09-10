@@ -2337,7 +2337,17 @@ def _gemini_json(prompt: str, system_instruction: str, max_tokens: int = 900) ->
                 data = json.loads(response.read().decode("utf-8"))
             candidates = data.get("candidates") or []
             parts = ((candidates[0].get("content") or {}).get("parts") or []) if candidates else []
-            parsed = json.loads("\n".join(str(part.get("text") or "") for part in parts).strip())
+            raw = "\n".join(str(part.get("text") or "") for part in parts).strip()
+            try:
+                parsed = json.loads(raw)
+            except json.JSONDecodeError:
+                # Some Gemini responses still wrap JSON in a markdown fence
+                # despite JSON mode. Recover the object instead of discarding
+                # an otherwise useful quiz result.
+                object_match = re.search(r"\{.*\}", raw, re.DOTALL)
+                if not object_match:
+                    raise
+                parsed = json.loads(object_match.group(0))
             if isinstance(parsed, dict):
                 return parsed, ""
             failures.append(f"{model_name}: response was not an object")
@@ -2386,8 +2396,8 @@ def gemini_enhance_career_matches(candidates: tuple[dict[str, object], ...]) -> 
     }
     result, _error = _gemini_json(
         json.dumps(profile, ensure_ascii=False),
-        "Improve career recommendations for a student. Rerank only the supplied candidate careers; do not add or rename careers. When riasec_profile is present, use its Holland code, strongest themes, and normalized percentages as the primary career-fit evidence, then use explicit written interests to refine the order. Mention the relevant RIASEC theme in each reason where it genuinely supports the match. Use constraints or dislikes to lower a match. Scores are exploration indicators, not guarantees. Return JSON only: {\"matches\":[{\"career\":string,\"score\":integer 55-95,\"reason\":string}],\"insights\":[string,string,string]}. Include every supplied career exactly once.",
-        max_tokens=1000,
+        "Improve career recommendations for a student. Rerank only the supplied candidate careers; do not add or rename careers. When riasec_profile is present, use its Holland code, strongest themes, and normalized percentages as the primary career-fit evidence, then use explicit written interests to refine the order. Mention the relevant RIASEC theme in each reason where it genuinely supports the match. Use constraints or dislikes to lower a match. Scores are exploration indicators, not guarantees. Return JSON only: {\"matches\":[{\"career\":string,\"score\":integer 55-95,\"reason\":string}],\"insights\":[string,string,string]}. Keep reasons concise so the response completes quickly.",
+        max_tokens=1400,
     )
     if not isinstance(result, dict) or not isinstance(result.get("matches"), list):
         st.session_state.gemini_quiz_status = "failed"
@@ -2411,7 +2421,13 @@ def gemini_enhance_career_matches(candidates: tuple[dict[str, object], ...]) -> 
             merged["reason"] = reason
         enhanced.append(merged)
         seen.add(name)
-    if set(allowed) != seen:
+    # Gemini occasionally omits one lower-ranked candidate. Keep its valid
+    # recommendations and append the missing deterministic cards rather than
+    # throwing away the complete AI-enhanced result.
+    for name in allowed:
+        if name not in seen:
+            enhanced.append(by_name[name])
+    if not seen:
         st.session_state.gemini_quiz_status = "invalid_response"
         return [], []
     enhanced.sort(key=lambda item: float(item.get("score", 0)), reverse=True)
