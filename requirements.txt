@@ -3,3 +3,4 @@ openai>=1.0.0
 certifi>=2024.0.0
 reportlab>=4.0
 requests>=2.32.0
+streamlit-cookies-controller>=0.0.4

@@ -29,6 +29,10 @@ from urllib.request import Request, urlopen
 import streamlit as st
 import streamlit.components.v1 as components
 import certifi
+try:
+    from streamlit_cookies_controller import CookieController
+except ImportError:
+    CookieController = None
 
 # The root app.py launches this file with runpy. Include this folder on the
 # import path so database.py can be imported both locally and on Streamlit.
@@ -94,6 +98,7 @@ GEMINI_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/opena
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
 DEFAULT_OLLAMA_MODEL = "llama3.2"
 st.set_page_config(page_title="Career AI", page_icon=LOGO_PATH, layout="wide", initial_sidebar_state="expanded")
+device_cookie_controller = CookieController(key="career_ai_device_cookies") if CookieController else None
 career_journal_component = components.declare_component(
     "career_journal",
     path=str(JOURNAL_COMPONENT_PATH),
@@ -1217,42 +1222,38 @@ def make_session_token(student_id: str) -> str:
 
 
 def browser_session_bridge() -> None:
-    """Persist the signed session token in this browser across clean-link visits."""
+    """Persist the signed session token in a real 30-day browser cookie."""
     try:
         token = str(st.query_params.get("session", "")).strip()
         forget = str(st.query_params.get("forget_session", "")) == "1"
     except Exception:
         token, forget = "", False
-    # The component stores only the signed, expiring token—not a password.
-    # document.referrer supplies the parent app URL without cross-origin reads.
-    script = f"""
-    <script>
-    (() => {{
-      const storageKey = "career_ai_device_session";
-      const suppliedToken = {json.dumps(token)};
-      const forget = {str(forget).lower()};
-      let parentUrl;
-      try {{ parentUrl = new URL(document.referrer); }} catch (_) {{ return; }}
-      if (forget) {{
-        localStorage.removeItem(storageKey);
-        parentUrl.searchParams.delete("session");
-        parentUrl.searchParams.delete("forget_session");
-        window.parent.location.replace(parentUrl.toString());
-        return;
-      }}
-      if (suppliedToken) {{
-        localStorage.setItem(storageKey, suppliedToken);
-        return;
-      }}
-      const remembered = localStorage.getItem(storageKey);
-      if (remembered) {{
-        parentUrl.searchParams.set("session", remembered);
-        window.parent.location.replace(parentUrl.toString());
-      }}
-    }})();
-    </script>
-    """
-    components.html(script, height=0, width=0)
+    if device_cookie_controller is None:
+        return
+    cookie_name = "career_ai_device_session"
+    remembered = device_cookie_controller.get(cookie_name)
+    if forget:
+        if remembered is not None:
+            device_cookie_controller.remove(cookie_name)
+        try:
+            st.query_params.clear()
+        except Exception:
+            pass
+        return
+    if token:
+        if remembered != token:
+            device_cookie_controller.set(
+                cookie_name,
+                token,
+                expires=datetime.now() + timedelta(days=30),
+                same_site="strict",
+            )
+        return
+    if isinstance(remembered, str) and remembered:
+        try:
+            st.query_params["session"] = remembered
+        except Exception:
+            pass
 
 
 def restore_session_from_url() -> None:
