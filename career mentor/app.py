@@ -2315,7 +2315,7 @@ def _gemini_json(prompt: str, system_instruction: str, max_tokens: int = 900) ->
     """Call Gemini for a structured decision with a safe local fallback."""
     api_key = gemini_api_key()
     if not api_key:
-        return None, "Gemini is not configured."
+        return None, "SKS AI is not configured."
     payload = json.dumps({
         "system_instruction": {"parts": [{"text": system_instruction}]},
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
@@ -2363,13 +2363,13 @@ def _gemini_json(prompt: str, system_instruction: str, max_tokens: int = 900) ->
             failures.append(f"{model_name}: {error.__class__.__name__}")
     if failures:
         print("Gemini structured request failed - " + "; ".join(failures))
-    return None, "Gemini could not check this right now."
+    return None, "SKS AI could not check this right now."
 
 
 def gemini_validate_quiz_answer(section: str, question: str, answer: str) -> tuple[bool | None, str]:
     """Semantically validate one quiz answer; None means Gemini unavailable."""
     if not gemini_api_key():
-        return None, "Gemini is not configured."
+        return None, "SKS AI is not configured."
     cache = st.session_state.setdefault("gemini_answer_checks", {})
     cache_key = hashlib.sha256(f"{section}\0{question}\0{answer.strip()}".encode("utf-8")).hexdigest()
     result = cache.get(cache_key)
@@ -2386,7 +2386,7 @@ def gemini_validate_quiz_answer(section: str, question: str, answer: str) -> tup
     valid = raw_valid is True or str(raw_valid).strip().lower() == "true"
     message = str(result.get("message") or "").strip()
     if valid:
-        return True, message or "Gemini confirmed that your answer is relevant and usable."
+        return True, message or "SKS AI confirmed that your answer is relevant and usable."
     return False, message or "Please revise this answer so it directly addresses the question."
 
 
@@ -2470,7 +2470,7 @@ def gemini_mentor_reply(question: str) -> tuple[str, str]:
     """Use Google's native Gemini REST API when a Gemini key is set."""
     api_key = gemini_api_key()
     if not api_key:
-        return "", "No Gemini key is configured."
+        return "", "No SKS AI key is configured."
 
     career_matches = ", ".join(career_suggestions()[:5]) or "Not available yet"
     profile_summary = {
@@ -2539,7 +2539,7 @@ def gemini_mentor_reply(question: str) -> tuple[str, str]:
 
     if failures:
         print("Gemini mentor request failed - " + "; ".join(failures))
-    return "", "Gemini could not answer right now."
+    return "", "SKS AI could not answer right now."
 
 
 def gpt_mentor_reply(question: str) -> tuple[str, str]:
@@ -3802,9 +3802,9 @@ def render_intake() -> None:
     previous_ai_check = st.session_state.pop("last_gemini_answer_check", None)
     if isinstance(previous_ai_check, dict):
         if previous_ai_check.get("ok"):
-            st.success(f"✦ Gemini check: {previous_ai_check.get('message', 'Previous answer approved.')}")
+            st.success(f"✦ SKS AI check: {previous_ai_check.get('message', 'Previous answer approved.')}")
         else:
-            st.warning(f"Gemini check unavailable: {previous_ai_check.get('message', 'Local validation was used.')}")
+            st.warning(f"SKS AI check unavailable: {previous_ai_check.get('message', 'Local validation was used.')}")
     key = f"intake_{index}"
     st.markdown(f"<div class='question-card'><div class='question-number'>QUESTION {index + 1} OF {len(questions)}</div><div class='question-text'>{escape(prompt)}</div>", unsafe_allow_html=True)
     # A form batches typing and clicking into one submission. This removes the
@@ -3855,10 +3855,10 @@ def render_intake() -> None:
                 return
             st.session_state.student_name = quiz_name.strip().title()
             st.session_state.student_email = quiz_email.strip()
-        with st.spinner("Gemini is checking this answer…"):
+        with st.spinner("SKS AI is checking this answer…"):
             ai_valid, ai_message = gemini_validate_quiz_answer(section, prompt, answer)
         if ai_valid is False:
-            st.error(f"Gemini asks you to revise this answer — {ai_message}")
+            st.error(f"SKS AI asks you to revise this answer — {ai_message}")
             return
         st.session_state.last_gemini_answer_check = {
             "ok": ai_valid is True,
@@ -3866,7 +3866,7 @@ def render_intake() -> None:
         }
         st.session_state.intake_answers[key] = answer.strip()
         if index == len(questions) - 1:
-            with st.spinner("Gemini is refining your first career matches…"):
+            with st.spinner("SKS AI is refining your first career matches…"):
                 ai_matches, ai_insights = gemini_enhance_career_matches(relevant_career_results())
             if ai_matches:
                 st.session_state.career_insights = {"ai_matches": ai_matches, "insights": ai_insights}
@@ -3886,11 +3886,11 @@ def render_intake_results() -> None:
     st.markdown("<div class='top-title'>Your Career Profile is Ready</div><div class='top-subtitle'>Your recommendations below are already based on the answers you wrote. The RIASEC quiz is optional and only refines them further.</div>", unsafe_allow_html=True)
     gemini_status = st.session_state.get("gemini_quiz_status", "")
     if gemini_status == "enhanced":
-        st.success("✦ Gemini checked your completed profile and refined these career matches.")
+        st.success("✦ SKS AI checked your completed profile and refined these career matches.")
     elif gemini_status in {"failed", "invalid_response"}:
-        st.warning("Gemini could not refine this attempt, so your reliable local career matches are shown instead.")
+        st.warning("SKS AI could not refine this attempt, so your reliable local career matches are shown instead.")
     elif gemini_status == "not_configured":
-        st.info("Add GEMINI_API_KEY in Streamlit Secrets to enable AI-refined quiz results.")
+        st.info("Configure the SKS AI service to enable AI-refined quiz results.")
     stat1, stat2, stat3 = st.columns(3)
     for col, icon, number, label in ((stat1, "🦋", f"{answered}/{total}", "Questions answered"), (stat2, "🧭", "Career profile", "Saved in this session"), (stat3, "🧠", "Next: personality", "Refine your matches")):
         with col: st.markdown(f"<div class='panel' style='text-align:center'><div class='icon-bubble' style='margin:auto'>{icon}</div><div class='result-number'>{number}</div><p class='muted'>{label}</p></div>", unsafe_allow_html=True)
@@ -3965,7 +3965,7 @@ def render_personality() -> None:
                 st.session_state.top_matches = matches
                 st.session_state.career_insights = insights
                 st.session_state.score_error = score_error
-            with st.spinner("Gemini is refining your career matches…"):
+            with st.spinner("SKS AI is refining your career matches…"):
                 ai_matches, ai_insights = gemini_enhance_career_matches(relevant_career_results())
             if ai_matches:
                 combined_insights = dict(st.session_state.career_insights) if isinstance(st.session_state.career_insights, dict) else {}
@@ -3991,11 +3991,11 @@ def render_personality_results() -> None:
     st.markdown(f"<div class='top-title'>{summary_title}</div><div class='top-subtitle'>Your strongest themes point to work environments and career families that may feel naturally engaging.</div>", unsafe_allow_html=True)
     gemini_status = st.session_state.get("gemini_quiz_status", "")
     if gemini_status == "enhanced":
-        st.success("✦ Gemini combined your written answers with your RIASEC profile to refine these results.")
+        st.success("✦ SKS AI combined your written answers with your RIASEC profile to refine these results.")
     elif gemini_status in {"failed", "invalid_response"}:
-        st.warning("Gemini could not refine this attempt, so your deterministic RIASEC results are shown instead.")
+        st.warning("SKS AI could not refine this attempt, so your deterministic RIASEC results are shown instead.")
     elif gemini_status == "not_configured":
-        st.info("Add GEMINI_API_KEY in Streamlit Secrets to connect Gemini to these RIASEC results.")
+        st.info("Configure the SKS AI service to connect it to these RIASEC results.")
     saved_profile = st.session_state.backend_profile or {}
     if not saved_profile.get("student_id") and st.session_state.backend_error and not backend_unavailable(st.session_state.backend_error):
         st.warning(f"Your on-screen summary is ready, but it was not saved to the backend. {st.session_state.backend_error}")
@@ -5262,7 +5262,7 @@ def render_help_privacy() -> None:
             "<div class='panel'><h3>What is saved</h3>"
             "<p class='muted'>Your account can save quiz and RIASEC answers, matches, roadmap progress, journal pages, "
             "weekly goals, AI Mentor history, feedback, and accessibility choices.</p>"
-            "<p class='muted'>Passwords are stored as secure hashes. When Gemini is configured, each written quiz answer "
+            "<p class='muted'>Passwords are stored as secure hashes. When SKS AI is configured, each written quiz answer "
             "is sent to it for relevance validation. Relevant non-sensitive answers are sent again after completion to "
             "improve career ordering; identity, health/support, and financial answers are excluded from that final matching request. AI Mentor may send your question and relevant career profile to its "
             "configured AI provider. Do not enter highly sensitive personal, medical, or financial information.</p></div>",
@@ -5524,7 +5524,7 @@ def render_ai_mentor() -> None:
     using_gemini = bool(gemini_api_key())
     using_gpt = bool(openai_api_key() and OpenAI is not None)
     if using_gemini:
-        st.caption(f"Gemini is ready to personalise career guidance using {gemini_model()}.")
+        st.caption("SKS AI is ready to personalise your career guidance.")
     elif using_gpt:
         st.caption("GPT is ready to personalise career guidance from your quiz profile.")
     else:
