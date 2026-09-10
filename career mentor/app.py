@@ -98,8 +98,8 @@ career_journal_component = components.declare_component(
 )
 initialise_database()
 
-PAGES = ("Dashboard", "Explore Careers", "Career Compare", "Opportunity Board", "Career Quest", "Career Journal", "Weekly Planner", "Skill Roadmap", "Scholarships", "Universities", "Career Report", "AI Mentor", "Display Settings", "Help & Privacy", "Change Password")
-PAGE_ICONS = {"Dashboard": "⌂", "Explore Careers": "⌕", "Career Compare": "⇄", "Opportunity Board": "✦", "Career Quest": "🎮", "Career Journal": "📔", "Weekly Planner": "✓", "Skill Roadmap": "↗", "Scholarships": "🦋", "Universities": "♜", "Career Report": "↓", "AI Mentor": "🦋", "Display Settings": "◐", "Help & Privacy": "?", "Change Password": "🔒", "Admin": "⚙"}
+PAGES = ("Dashboard", "My Favourites", "Explore Careers", "Career Compare", "Opportunity Board", "Career Quest", "Career Journal", "Weekly Planner", "Skill Roadmap", "Scholarships", "Universities", "Career Report", "AI Mentor", "Display Settings", "Help & Privacy", "Change Password")
+PAGE_ICONS = {"Dashboard": "⌂", "My Favourites": "♥", "Explore Careers": "⌕", "Career Compare": "⇄", "Opportunity Board": "✦", "Career Quest": "🎮", "Career Journal": "📔", "Weekly Planner": "✓", "Skill Roadmap": "↗", "Scholarships": "🦋", "Universities": "♜", "Career Report": "↓", "AI Mentor": "🦋", "Display Settings": "◐", "Help & Privacy": "?", "Change Password": "🔒", "Admin": "⚙"}
 GLOBAL_UNIVERSITY_COUNTRIES = (
     "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria",
     "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan", "Bolivia",
@@ -2583,12 +2583,12 @@ def match_score(match: dict[str, object]) -> str:
         return str(score)
 
 
-def render_favorite_toggle(title: str, collection: str, icon: str = "★") -> None:
+def render_favorite_toggle(title: str, collection: str) -> None:
     """Render a one-click save/remove control and persist it immediately."""
     saved = list(st.session_state.get(collection, []))
     is_saved = title in saved
     safe_key = hashlib.sha256(f"{collection}:{title}".encode("utf-8")).hexdigest()[:14]
-    label = f"{icon} Saved — click to remove" if is_saved else f"{icon} Save"
+    label = "♥ Favourited" if is_saved else "♡ Add to favourites"
     if st.button(label, key=f"favorite_{safe_key}", use_container_width=True, type="primary" if is_saved else "secondary"):
         if is_saved:
             st.session_state[collection] = [item for item in saved if item != title]
@@ -4799,7 +4799,7 @@ def render_sidebar() -> str:
         with name_col: st.markdown("<div style='padding-top:3px'><div class='brand-name'>Career <span>AI</span></div><div class='sidebar-tagline'>Your AI Career Mentor</div></div>", unsafe_allow_html=True)
         page = str(st.session_state.get("nav_page", "Dashboard"))
         navigation_groups = (
-            ("Main", ("Dashboard", "Explore Careers", "Career Compare", "AI Mentor")),
+            ("Main", ("Dashboard", "My Favourites", "Explore Careers", "Career Compare", "AI Mentor")),
             ("Plan & grow", ("Opportunity Board", "Weekly Planner", "Skill Roadmap", "Career Journal", "Career Report")),
             ("Discover", ("Career Quest", "Scholarships", "Universities")),
             ("Account", ("Display Settings", "Help & Privacy", "Change Password")),
@@ -5555,9 +5555,9 @@ def render_ai_mentor() -> None:
 def render_explore_careers() -> None:
     st.markdown("<div class='top-title'>Explore Careers</div><div class='top-subtitle'>Search hundreds of career paths across every major field.</div>", unsafe_allow_html=True)
     saved_careers = list(st.session_state.get("saved_careers", []))
-    with st.expander(f"★ My saved careers ({len(saved_careers)})", expanded=bool(saved_careers)):
+    with st.expander(f"♥ My favourite careers ({len(saved_careers)})", expanded=bool(saved_careers)):
         if not saved_careers:
-            st.caption("Tap ★ Save on any career card to build your shortlist.")
+            st.caption("Tap ♡ on any career card to build your favourites.")
         else:
             st.write(" · ".join(saved_careers))
     st.button(
@@ -5643,7 +5643,7 @@ def render_explore_careers() -> None:
                         f"<h3>{escape(job)}</h3><p class='muted'>{escape(description)}</p>",
                         unsafe_allow_html=True,
                     )
-                    render_favorite_toggle(job, "saved_careers", "★")
+                    render_favorite_toggle(job, "saved_careers")
 
 
 def suggested_comparison_careers() -> tuple[str, ...]:
@@ -5837,7 +5837,7 @@ def render_universities() -> None:
                         f"<h3>{escape(item['name'])}</h3><p class='muted'>{escape(detail)}</p></div>",
                         unsafe_allow_html=True,
                     )
-                    render_favorite_toggle(str(item["name"]), "saved_universities", "♥")
+                    render_favorite_toggle(str(item["name"]), "saved_universities")
                     st.link_button(
                         "Open university website ↗",
                         item["website"] or university_website(item["name"]),
@@ -5853,7 +5853,7 @@ def render_universities() -> None:
         for column, university in zip(recommendation_columns, recommended):
             with column:
                 st.markdown(f"<div class='match-card'><span class='match-pill'>For you</span><div class='icon-bubble'>🎓</div><h3>{escape(university['name'])}</h3><p class='muted'><b>{escape(university['field'])}</b><br>{escape(university['country'])}<br><span class='mint'>{escape(university['scholarships'])}</span></p></div>", unsafe_allow_html=True)
-                render_favorite_toggle(university["name"], "saved_universities", "♥")
+                render_favorite_toggle(university["name"], "saved_universities")
                 st.link_button("Open university website ↗", university_website(university["name"]), use_container_width=True)
     st.markdown("<h2 style='margin-top:28px'>Browse all curated universities</h2>", unsafe_allow_html=True)
     fields = tuple(sorted({university["field"] for university in UNIVERSITY_CATALOG}))
@@ -5881,7 +5881,7 @@ def render_universities() -> None:
         for column, university in zip(columns, row):
             with column:
                 st.markdown(f"<div class='match-card'><span class='match-pill'>{escape(university['country'])}</span><div class='icon-bubble'>🎓</div><h3>{escape(university['name'])}</h3><p class='muted'><b>{escape(university['field'])}</b><br>{escape(university['reputation'])}<br><span class='mint'>{escape(university['scholarships'])}</span></p></div>", unsafe_allow_html=True)
-                render_favorite_toggle(university["name"], "saved_universities", "♥")
+                render_favorite_toggle(university["name"], "saved_universities")
                 st.link_button("Open university website ↗", university_website(university["name"]), use_container_width=True, key=f"university_link_{row_start}_{university['name']}")
 
 
@@ -5898,7 +5898,7 @@ def render_scholarships() -> None:
                     f"<p class='muted'><b>Coverage:</b> {escape(item['coverage'])}<br><span class='mint'>{escape(item['best_for'])}</span></p>",
                     unsafe_allow_html=True,
                 )
-                render_favorite_toggle(item["name"], "saved_scholarships", "♥")
+                render_favorite_toggle(item["name"], "saved_scholarships")
     st.markdown("<h2 style='margin-top:28px'>Browse all scholarships</h2>", unsafe_allow_html=True)
     query = st.text_input("Search scholarships", placeholder="Try UK, STEM, master's, India…").strip().lower()
     filtered = [
@@ -5919,7 +5919,41 @@ def render_scholarships() -> None:
                         f"<p class='muted'><b>Funded by:</b> {escape(item['funded_by'])}<br><b>Coverage:</b> {escape(item['coverage'])}<br><span class='mint'>{escape(item['best_for'])}</span></p>",
                         unsafe_allow_html=True,
                     )
-                    render_favorite_toggle(item["name"], "saved_scholarships", "♥")
+                    render_favorite_toggle(item["name"], "saved_scholarships")
+
+
+def render_favourites() -> None:
+    """Show every saved item in one place with one-click removal."""
+    st.markdown(
+        "<div class='top-title'>My Favourites ♥</div>"
+        "<div class='top-subtitle'>Your saved careers, universities, and scholarships—all together.</div>",
+        unsafe_allow_html=True,
+    )
+    groups = (
+        ("Favourite careers", "saved_careers", "🧭", "Explore Careers"),
+        ("Favourite universities", "saved_universities", "🎓", "Universities"),
+        ("Favourite scholarships", "saved_scholarships", "🦋", "Scholarships"),
+    )
+    total = sum(len(st.session_state.get(collection, [])) for _, collection, _, _ in groups)
+    if not total:
+        st.info("You have no favourites yet. Tap ♡ on a career, university, or scholarship card to add it here.")
+    for heading, collection, icon, source_page in groups:
+        items = list(st.session_state.get(collection, []))
+        st.markdown(f"## {heading} <span class='match-pill'>{len(items)}</span>", unsafe_allow_html=True)
+        if not items:
+            st.caption(f"No saved items yet. Open {source_page} and tap ♡ on anything you like.")
+            continue
+        for row_start in range(0, len(items), 3):
+            columns = st.columns(3, gap="large")
+            for column, title in zip(columns, items[row_start:row_start + 3]):
+                with column:
+                    with st.container(border=True):
+                        st.markdown(
+                            f"<div class='icon-bubble'>{icon}</div><h3>{escape(title)}</h3>"
+                            f"<p class='muted'>Saved to your personal favourites.</p>",
+                            unsafe_allow_html=True,
+                        )
+                        render_favorite_toggle(title, collection)
 
 
 def render_simple_page(page: str) -> None:
@@ -5941,6 +5975,7 @@ def render_app() -> None:
         st.session_state.nav_page = destination
     page = render_sidebar()
     if page == "Dashboard": render_dashboard()
+    elif page == "My Favourites": render_favourites()
     elif page == "Explore Careers": render_explore_careers()
     elif page == "Career Compare": render_career_compare()
     elif page == "Opportunity Board": render_opportunity_board()
