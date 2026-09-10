@@ -100,8 +100,8 @@ career_journal_component = components.declare_component(
 )
 initialise_database()
 
-PAGES = ("Dashboard", "My Favourites", "Explore Careers", "Career Compare", "Opportunity Board", "Career Quest", "Career Journal", "Weekly Planner", "Skill Roadmap", "Scholarships", "Universities", "Career Report", "AI Mentor", "Display Settings", "Help & Privacy", "Change Password")
-PAGE_ICONS = {"Dashboard": "⌂", "My Favourites": "♥", "Explore Careers": "⌕", "Career Compare": "⇄", "Opportunity Board": "✦", "Career Quest": "🎮", "Career Journal": "📔", "Weekly Planner": "✓", "Skill Roadmap": "↗", "Scholarships": "🦋", "Universities": "♜", "Career Report": "↓", "AI Mentor": "🦋", "Display Settings": "◐", "Help & Privacy": "?", "Change Password": "🔒", "Admin": "⚙"}
+PAGES = ("Dashboard", "Talk It Out", "My Favourites", "Explore Careers", "Career Compare", "Opportunity Board", "Career Quest", "Career Journal", "Weekly Planner", "Skill Roadmap", "Scholarships", "Universities", "Career Report", "AI Mentor", "Display Settings", "Help & Privacy", "Change Password")
+PAGE_ICONS = {"Dashboard": "⌂", "Talk It Out": "💬", "My Favourites": "♥", "Explore Careers": "⌕", "Career Compare": "⇄", "Opportunity Board": "✦", "Career Quest": "🎮", "Career Journal": "📔", "Weekly Planner": "✓", "Skill Roadmap": "↗", "Scholarships": "🦋", "Universities": "♜", "Career Report": "↓", "AI Mentor": "🦋", "Display Settings": "◐", "Help & Privacy": "?", "Change Password": "🔒", "Admin": "⚙"}
 GLOBAL_UNIVERSITY_COUNTRIES = (
     "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria",
     "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan", "Bolivia",
@@ -1186,6 +1186,7 @@ def init_state() -> None:
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
     st.session_state.setdefault("gemini_quiz_error", "")
+    st.session_state.setdefault("talk_history", [])
     # Migrate profiles saved before this page was renamed.
     if st.session_state.get("nav_page") == "Accessibility":
         st.session_state.nav_page = "Display Settings"
@@ -1290,7 +1291,7 @@ PERSISTED_PROFILE_KEYS = (
     "app_stage",
     "intake_mode", "intake_index", "intake_answers", "personality_mode",
     "personality_index", "personality_answers", "personality_complete",
-    "top_matches", "career_insights", "score_error", "mentor_history",
+    "top_matches", "career_insights", "score_error", "mentor_history", "talk_history",
     "nav_page", "local_roadmap_completed", "career_journal", "weekly_goals",
     "feedback_entries", "saved_careers", "saved_universities",
     "saved_scholarships", "account_recovery",
@@ -4980,7 +4981,7 @@ def render_sidebar() -> str:
         with name_col: st.markdown("<div style='padding-top:3px'><div class='brand-name'>Career <span>AI</span></div><div class='sidebar-tagline'>Your AI Career Mentor</div></div>", unsafe_allow_html=True)
         page = str(st.session_state.get("nav_page", "Dashboard"))
         navigation_groups = (
-            ("Main", ("Dashboard", "My Favourites", "Explore Careers", "Career Compare", "AI Mentor")),
+            ("Main", ("Dashboard", "Talk It Out", "AI Mentor", "My Favourites", "Explore Careers", "Career Compare")),
             ("Plan & grow", ("Opportunity Board", "Weekly Planner", "Skill Roadmap", "Career Journal", "Career Report")),
             ("Discover", ("Career Quest", "Scholarships", "Universities")),
             ("Account", ("Display Settings", "Help & Privacy", "Change Password")),
@@ -5379,7 +5380,7 @@ def render_help_privacy() -> None:
         st.markdown(
             "<div class='panel'><h3>What is saved</h3>"
             "<p class='muted'>Your account can save quiz and RIASEC answers, matches, roadmap progress, journal pages, "
-            "weekly goals, AI Mentor history, feedback, and accessibility choices.</p>"
+            "weekly goals, AI Mentor and Talk It Out history, feedback, and accessibility choices.</p>"
             "<p class='muted'>Passwords are stored as secure hashes. When SKS AI is configured, each written quiz answer "
             "is sent to it for relevance validation. Relevant non-sensitive answers are sent again after completion to "
             "improve career ordering; identity, health/support, and financial answers are excluded from that final matching request. AI Mentor may send your question and relevant career profile to its "
@@ -5635,6 +5636,142 @@ def render_dashboard() -> None:
         scholarship_rows = "".join(f"<p class='muted'>{escape(item['name'])}<br><span class='mint'>{escape(item['best_for'])}</span></p>" for item in scholarships)
         st.markdown("<div class='panel'><h3>🦋 Scholarships for You</h3>" + scholarship_rows + "</div>", unsafe_allow_html=True)
     with right: st.markdown("<div class='panel'><h3>🦋 Your Learning Roadmap</h3><p class='mint'>● Self discovery</p><p class='muted'>○ Career exploration</p><p class='muted'>○ Skill building</p><p class='muted'>○ Real-world preparation</p></div>", unsafe_allow_html=True)
+
+
+def urgent_safety_message(message: str) -> str:
+    """Return an urgent support message when text suggests immediate danger."""
+    lowered = message.lower()
+    danger_patterns = (
+        r"\bkill myself\b", r"\bend my life\b", r"\bsuicid(?:e|al)\b",
+        r"\bhurt myself\b", r"\bself[- ]harm\b", r"\bdon't want to live\b",
+        r"\bdo not want to live\b", r"\bnot safe\b", r"\bin immediate danger\b",
+    )
+    if not any(re.search(pattern, lowered) for pattern in danger_patterns):
+        return ""
+    return (
+        "I’m really glad you said this out loud. Your safety matters more than continuing this chat. "
+        "If you may act on these thoughts or you are in immediate danger, call India’s emergency number **112** now, "
+        "or go to the nearest emergency department. You can also call **Tele-MANAS at 14416 or 1800-89-14416** "
+        "for 24/7 mental-health support. Please move away from anything you could use to hurt yourself and contact a "
+        "trusted person—parent, sibling, friend, teacher, counsellor, or neighbour—and say clearly: “I don’t feel safe "
+        "being alone right now. Please stay with me.” If you are outside India, call your local emergency number or crisis line."
+    )
+
+
+def sks_talk_reply(message: str) -> tuple[str, str]:
+    """Generate an empathetic, non-clinical Talk It Out response with SKS AI."""
+    api_key = gemini_api_key()
+    if not api_key:
+        return "", "SKS AI is not configured."
+    system_instruction = (
+        "You are SKS AI in a section called Talk It Out. Respond like a deeply attentive, warm, emotionally intelligent "
+        "supportive listener, while being honest that you are an AI and do not have human feelings. First reflect the "
+        "specific emotions and situation you heard so the person feels understood. Validate feelings without automatically "
+        "agreeing with harmful conclusions. Then gently help them untangle the issue, offer one or two realistic next steps "
+        "or a grounding exercise, and end with one thoughtful, relevant question that invites them to continue. Write a "
+        "substantial response, usually 180–350 words, but never pad or use a fixed template. Do not diagnose, prescribe, "
+        "shame, lecture, promise secrecy, claim consciousness, encourage dependency, or say you are their only support. "
+        "Encourage trusted human or professional support when distress is serious."
+    )
+    contents = []
+    for item in st.session_state.get("talk_history", [])[-8:]:
+        if not isinstance(item, dict):
+            continue
+        role = "user" if item.get("role") == "student" else "model"
+        contents.append({"role": role, "parts": [{"text": str(item.get("message") or "")} ]})
+    contents.append({"role": "user", "parts": [{"text": message}]})
+    payload = json.dumps({
+        "system_instruction": {"parts": [{"text": system_instruction}]},
+        "contents": contents,
+        "generationConfig": {
+            "maxOutputTokens": 1400,
+            "thinkingConfig": {"thinkingLevel": "low"},
+        },
+    }).encode("utf-8")
+    failures = []
+    for model_name in dict.fromkeys((gemini_model(), "gemini-3.5-flash", "gemini-3.1-flash-lite")):
+        request = Request(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent",
+            data=payload,
+            headers={"Content-Type": "application/json", "Accept": "application/json", "x-goog-api-key": api_key},
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=40, context=ssl.create_default_context(cafile=certifi.where())) as response:
+                data = json.loads(response.read().decode("utf-8"))
+            candidates = data.get("candidates") or []
+            parts = ((candidates[0].get("content") or {}).get("parts") or []) if candidates else []
+            reply = "\n".join(str(part.get("text") or "") for part in parts).strip()
+            if reply:
+                return reply, ""
+            failures.append(f"{model_name}: empty response")
+        except HTTPError as error:
+            failures.append(f"{model_name}: HTTP {error.code}")
+        except (URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
+            failures.append(f"{model_name}: {error.__class__.__name__}")
+    if failures:
+        print("SKS Talk It Out request failed - " + "; ".join(failures))
+    return "", "SKS AI could not respond right now. Please try again shortly."
+
+
+def render_talk_it_out() -> None:
+    st.markdown(
+        "<div class='top-title'>Talk It Out 💬</div>"
+        "<div class='top-subtitle'>A calm space to put your thoughts into words and take things one step at a time.</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<div class='ai-card'><h3>You don’t need to organise your thoughts first.</h3>"
+        "<p>Tell SKS AI what happened, what keeps circling in your mind, or simply how today feels. It will listen, "
+        "reflect what it hears, and help you find a manageable next step. You can write as much or as little as you want.</p>"
+        "<p class='muted'><b>Please know:</b> SKS AI is an AI, not a therapist or emergency service. Messages are saved "
+        "to your Career AI account so the conversation can continue. Avoid names or identifying details you do not want saved.</p></div>",
+        unsafe_allow_html=True,
+    )
+    if not st.session_state.talk_history:
+        st.info("Hi, I’m SKS AI. You can begin anywhere—what has been weighing on your mind lately?")
+    if st.button("Clear Talk It Out conversation", key="clear_talk_history"):
+        st.session_state.talk_history = []
+        save_current_student_state()
+        st.rerun()
+    with st.form("talk_it_out_form", clear_on_submit=True):
+        message = st.text_area(
+            "What’s on your mind?",
+            placeholder="You can be honest here. Start with what happened, what you feel, or what you wish someone understood…",
+            height=150,
+        )
+        submitted = st.form_submit_button("Talk it out with SKS AI →", type="primary", use_container_width=True)
+    if submitted:
+        clean_message = message.strip()
+        if not clean_message:
+            st.error("Write whatever is on your mind before sending.")
+        else:
+            urgent_reply = urgent_safety_message(clean_message)
+            if urgent_reply:
+                reply, error = urgent_reply, ""
+            else:
+                with st.spinner("SKS AI is listening carefully…"):
+                    reply, error = sks_talk_reply(clean_message)
+            if not reply:
+                reply = (
+                    "I hear that you’re carrying something important, and I don’t want a technical problem to make you "
+                    "feel ignored. SKS AI is temporarily unavailable. If you can, write down the strongest feeling you "
+                    "notice right now and one thing that would make the next hour slightly easier, then try sending again."
+                )
+            st.session_state.talk_history.extend((
+                {"role": "student", "message": clean_message},
+                {"role": "ai", "message": reply},
+            ))
+            st.session_state.talk_last_error = error
+            save_current_student_state()
+            st.rerun()
+    if st.session_state.get("talk_last_error"):
+        st.caption(st.session_state.talk_last_error)
+    for item in st.session_state.talk_history:
+        role = "You" if item.get("role") == "student" else "SKS AI"
+        css_class = "panel" if role == "You" else "ai-card"
+        content = escape(str(item.get("message") or "")).replace("\n", "<br>")
+        st.markdown(f"<div class='{css_class}'><b>{role}</b><p>{content}</p></div>", unsafe_allow_html=True)
 
 
 def render_ai_mentor() -> None:
@@ -6156,6 +6293,7 @@ def render_app() -> None:
         st.session_state.nav_page = destination
     page = render_sidebar()
     if page == "Dashboard": render_dashboard()
+    elif page == "Talk It Out": render_talk_it_out()
     elif page == "My Favourites": render_favourites()
     elif page == "Explore Careers": render_explore_careers()
     elif page == "Career Compare": render_career_compare()
