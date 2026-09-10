@@ -1427,8 +1427,10 @@ def inject_styles() -> None:
     [data-testid='stHorizontalBlock']{{gap:1.25rem!important}}
     div[data-testid='stButton'],div[data-testid='stFormSubmitButton']{{margin:.35rem 0 .75rem}}
     .sidebar-section-label{{margin:1.4rem 0 .55rem;color:#cfc4eb;font-size:.76rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase}}
-    [data-testid='stSidebar'] .st-key-sidebar_quick_ai button,[data-testid='stSidebar'] .st-key-sidebar_quick_settings button,[data-testid='stSidebar'] .st-key-sidebar_quick_admin button{{min-height:40px!important;margin-bottom:2px!important;text-align:left!important;justify-content:flex-start!important;padding-left:15px!important;background:rgba(255,255,255,.09)!important;border-color:rgba(255,255,255,.16)!important;box-shadow:none!important}}
-    [data-testid='stSidebar'] .st-key-sidebar_quick_ai button:hover,[data-testid='stSidebar'] .st-key-sidebar_quick_settings button:hover,[data-testid='stSidebar'] .st-key-sidebar_quick_admin button:hover{{background:rgba(139,92,246,.35)!important;transform:none!important}}
+    [data-testid='stSidebar'] [class*='st-key-sidebar_nav_']{{margin:0!important}}
+    [data-testid='stSidebar'] [class*='st-key-sidebar_nav_'] button{{min-height:36px!important;margin:0 0 5px!important;text-align:left!important;justify-content:flex-start!important;padding:7px 12px!important;background:transparent!important;border:1px solid transparent!important;border-radius:9px!important;box-shadow:none!important;font-size:.86rem!important}}
+    [data-testid='stSidebar'] [class*='st-key-sidebar_nav_'] button:hover{{background:rgba(255,255,255,.1)!important;border-color:rgba(255,255,255,.13)!important;transform:none!important}}
+    [data-testid='stSidebar'] [class*='st-key-sidebar_nav_'] button:disabled{{background:linear-gradient(90deg,rgba(124,58,237,.72),rgba(239,94,125,.58))!important;border-color:rgba(255,255,255,.18)!important;color:#fff!important;opacity:1!important;cursor:default!important}}
     button:focus-visible,input:focus-visible,textarea:focus-visible,[role='radio']:focus-visible,[role='combobox']:focus-visible,a:focus-visible{{outline:3px solid #ff5b7d!important;outline-offset:3px!important}}
     @media(prefers-reduced-motion:reduce){{*,*::before,*::after{{animation:none!important;transition:none!important;scroll-behavior:auto!important}}}}
     @media(max-width:900px){{.block-container{{padding:1.25rem 1rem 2.5rem!important}}.match-grid{{grid-template-columns:1fr!important}}.top-title{{font-size:1.9rem}}.question-text{{font-size:1.3rem}}.panel,.question-card,.choice-card{{padding:21px!important}}}}
@@ -4775,19 +4777,31 @@ def render_sidebar() -> str:
         logo_col, name_col = st.columns([.3, .7], gap="small")
         with logo_col: st.image(LOGO_PATH, width=62)
         with name_col: st.markdown("<div style='padding-top:3px'><div class='brand-name'>Career <span>AI</span></div><div class='sidebar-tagline'>Your AI Career Mentor</div></div>", unsafe_allow_html=True)
-        st.caption("Navigate")
-        pages = (*PAGES, "Admin") if is_admin() else PAGES
-        page = st.selectbox("Navigation", pages, format_func=lambda p: f"{PAGE_ICONS[p]}  {p}", key="nav_page", label_visibility="collapsed")
-        st.markdown("<div class='sidebar-section-label'>Quick access</div>", unsafe_allow_html=True)
-        if st.button("🦋  AI Mentor", key="sidebar_quick_ai", use_container_width=True):
-            queue_navigation("AI Mentor")
-            st.rerun()
-        if st.button("◐  Display Settings", key="sidebar_quick_settings", use_container_width=True):
-            queue_navigation("Display Settings")
-            st.rerun()
-        if is_admin() and st.button("⚙  Admin", key="sidebar_quick_admin", use_container_width=True):
-            queue_navigation("Admin")
-            st.rerun()
+        page = str(st.session_state.get("nav_page", "Dashboard"))
+        navigation_groups = (
+            ("Main", ("Dashboard", "Explore Careers", "Career Compare", "AI Mentor")),
+            ("Plan & grow", ("Opportunity Board", "Weekly Planner", "Skill Roadmap", "Career Journal", "Career Report")),
+            ("Discover", ("Career Quest", "Scholarships", "Universities")),
+            ("Account", ("Display Settings", "Help & Privacy", "Change Password")),
+        )
+        for group_name, group_pages in navigation_groups:
+            st.markdown(f"<div class='sidebar-section-label'>{group_name}</div>", unsafe_allow_html=True)
+            for destination in group_pages:
+                active = destination == page
+                if st.button(
+                    f"{PAGE_ICONS[destination]}  {destination}",
+                    key=f"sidebar_nav_{destination.lower().replace(' ', '_').replace('&', 'and')}",
+                    use_container_width=True,
+                    type="primary" if active else "secondary",
+                    disabled=active,
+                ):
+                    queue_navigation(destination)
+                    st.rerun()
+        if is_admin():
+            st.markdown("<div class='sidebar-section-label'>Administration</div>", unsafe_allow_html=True)
+            if st.button("⚙  Admin", key="sidebar_nav_admin", use_container_width=True, type="primary" if page == "Admin" else "secondary", disabled=page == "Admin"):
+                queue_navigation("Admin")
+                st.rerun()
         st.markdown("---")
         if st.button("Log out", use_container_width=True):
             log_out()
