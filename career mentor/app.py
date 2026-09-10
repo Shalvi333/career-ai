@@ -1413,9 +1413,22 @@ def inject_styles() -> None:
     {large_text_css}
     {high_contrast_css}
     {reduce_motion_css}
+    /* Spacious layout: clearer grouping and fewer visually merged controls. */
+    .block-container{{max-width:1280px!important;padding:2.8rem 3.2rem 4rem!important}}
+    .top-title{{margin-bottom:8px!important}}.top-subtitle{{margin-bottom:28px!important;line-height:1.6}}
+    h2{{margin-top:2.25rem!important;margin-bottom:1rem!important}}
+    .panel{{padding:26px!important;margin-bottom:12px!important;border-radius:20px!important}}
+    .choice-card{{padding:34px!important;margin-bottom:16px!important;border-radius:22px!important}}
+    .question-card{{padding:34px!important;margin-bottom:22px!important;border-radius:22px!important}}
+    .question-text{{line-height:1.45!important;margin:18px 0 25px!important}}
+    .progress-shell{{margin:14px 0 32px!important}}
+    .match-grid{{grid-template-columns:repeat(auto-fit,minmax(235px,1fr))!important;gap:18px!important}}
+    .match-card{{padding:20px!important;min-height:175px!important;border-radius:16px!important}}
+    [data-testid='stHorizontalBlock']{{gap:1.25rem!important}}
+    div[data-testid='stButton'],div[data-testid='stFormSubmitButton']{{margin:.35rem 0 .75rem}}
     button:focus-visible,input:focus-visible,textarea:focus-visible,[role='radio']:focus-visible,[role='combobox']:focus-visible,a:focus-visible{{outline:3px solid #ff5b7d!important;outline-offset:3px!important}}
     @media(prefers-reduced-motion:reduce){{*,*::before,*::after{{animation:none!important;transition:none!important;scroll-behavior:auto!important}}}}
-    @media(max-width:900px){{.block-container{{padding:1rem}}.match-grid{{grid-template-columns:1fr}}.top-title{{font-size:1.9rem}}.question-text{{font-size:1.3rem}}}}
+    @media(max-width:900px){{.block-container{{padding:1.25rem 1rem 2.5rem!important}}.match-grid{{grid-template-columns:1fr!important}}.top-title{{font-size:1.9rem}}.question-text{{font-size:1.3rem}}.panel,.question-card,.choice-card{{padding:21px!important}}}}
     </style>""", unsafe_allow_html=True)
 
 
@@ -4738,9 +4751,9 @@ def render_sidebar() -> str:
         logo_col, name_col = st.columns([.3, .7], gap="small")
         with logo_col: st.image(LOGO_PATH, width=62)
         with name_col: st.markdown("<div style='padding-top:3px'><div class='brand-name'>Career <span>AI</span></div><div class='sidebar-tagline'>Your AI Career Mentor</div></div>", unsafe_allow_html=True)
-        st.markdown("---")
+        st.caption("Navigate")
         pages = (*PAGES, "Admin") if is_admin() else PAGES
-        page = st.radio("Navigation", pages, format_func=lambda p: f"{PAGE_ICONS[p]}  {p}", key="nav_page", label_visibility="collapsed")
+        page = st.selectbox("Navigation", pages, format_func=lambda p: f"{PAGE_ICONS[p]}  {p}", key="nav_page", label_visibility="collapsed")
         st.markdown("---")
         if st.button("Log out", use_container_width=True):
             log_out()
@@ -5249,31 +5262,20 @@ def render_dashboard() -> None:
     else:
         st.caption("Career quiz replaces your written interests. RIASEC re-attempt keeps those interests and lets you choose Quick or Full again.")
 
-    opportunity_col, planner_col, report_col = st.columns(3, gap="medium")
-    with opportunity_col:
-        if st.button(
-            "✦ Find opportunities",
-            key="dashboard_open_opportunities",
-            use_container_width=True,
-        ):
-            queue_navigation("Opportunity Board")
-            st.rerun()
-    with planner_col:
-        if st.button(
-            "✓ Plan my week",
-            key="dashboard_open_weekly_planner",
-            use_container_width=True,
-        ):
-            queue_navigation("Weekly Planner")
-            st.rerun()
-    with report_col:
-        if st.button(
-            "↓ Download career report",
-            key="dashboard_open_career_report",
-            use_container_width=True,
-        ):
-            queue_navigation("Career Report")
-            st.rerun()
+    with st.expander("More dashboard actions"):
+        opportunity_col, planner_col, report_col = st.columns(3, gap="large")
+        with opportunity_col:
+            if st.button("✦ Find opportunities", key="dashboard_open_opportunities", use_container_width=True):
+                queue_navigation("Opportunity Board")
+                st.rerun()
+        with planner_col:
+            if st.button("✓ Plan my week", key="dashboard_open_weekly_planner", use_container_width=True):
+                queue_navigation("Weekly Planner")
+                st.rerun()
+        with report_col:
+            if st.button("↓ Download career report", key="dashboard_open_career_report", use_container_width=True):
+                queue_navigation("Career Report")
+                st.rerun()
 
     live_careers, _ = load_careers_from_backend(careers_api_url())
     scored_matches = displayed_career_matches() if career_quiz_finished else tuple()
