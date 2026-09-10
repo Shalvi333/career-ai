@@ -1426,6 +1426,9 @@ def inject_styles() -> None:
     .match-card{{padding:20px!important;min-height:175px!important;border-radius:16px!important}}
     [data-testid='stHorizontalBlock']{{gap:1.25rem!important}}
     div[data-testid='stButton'],div[data-testid='stFormSubmitButton']{{margin:.35rem 0 .75rem}}
+    .sidebar-section-label{{margin:1.4rem 0 .55rem;color:#cfc4eb;font-size:.76rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase}}
+    [data-testid='stSidebar'] .st-key-sidebar_quick_ai button,[data-testid='stSidebar'] .st-key-sidebar_quick_settings button,[data-testid='stSidebar'] .st-key-sidebar_quick_admin button{{min-height:40px!important;margin-bottom:2px!important;text-align:left!important;justify-content:flex-start!important;padding-left:15px!important;background:rgba(255,255,255,.09)!important;border-color:rgba(255,255,255,.16)!important;box-shadow:none!important}}
+    [data-testid='stSidebar'] .st-key-sidebar_quick_ai button:hover,[data-testid='stSidebar'] .st-key-sidebar_quick_settings button:hover,[data-testid='stSidebar'] .st-key-sidebar_quick_admin button:hover{{background:rgba(139,92,246,.35)!important;transform:none!important}}
     button:focus-visible,input:focus-visible,textarea:focus-visible,[role='radio']:focus-visible,[role='combobox']:focus-visible,a:focus-visible{{outline:3px solid #ff5b7d!important;outline-offset:3px!important}}
     @media(prefers-reduced-motion:reduce){{*,*::before,*::after{{animation:none!important;transition:none!important;scroll-behavior:auto!important}}}}
     @media(max-width:900px){{.block-container{{padding:1.25rem 1rem 2.5rem!important}}.match-grid{{grid-template-columns:1fr!important}}.top-title{{font-size:1.9rem}}.question-text{{font-size:1.3rem}}.panel,.question-card,.choice-card{{padding:21px!important}}}}
@@ -4775,6 +4778,16 @@ def render_sidebar() -> str:
         st.caption("Navigate")
         pages = (*PAGES, "Admin") if is_admin() else PAGES
         page = st.selectbox("Navigation", pages, format_func=lambda p: f"{PAGE_ICONS[p]}  {p}", key="nav_page", label_visibility="collapsed")
+        st.markdown("<div class='sidebar-section-label'>Quick access</div>", unsafe_allow_html=True)
+        if st.button("🦋  AI Mentor", key="sidebar_quick_ai", use_container_width=True):
+            queue_navigation("AI Mentor")
+            st.rerun()
+        if st.button("◐  Display Settings", key="sidebar_quick_settings", use_container_width=True):
+            queue_navigation("Display Settings")
+            st.rerun()
+        if is_admin() and st.button("⚙  Admin", key="sidebar_quick_admin", use_container_width=True):
+            queue_navigation("Admin")
+            st.rerun()
         st.markdown("---")
         if st.button("Log out", use_container_width=True):
             log_out()
