@@ -1231,7 +1231,13 @@ def browser_session_bridge() -> None:
     if device_cookie_controller is None:
         return
     cookie_name = "career_ai_device_session"
-    remembered = device_cookie_controller.get(cookie_name)
+    # On a brand-new visit, read the cookie directly from the initial HTTP
+    # request. The JavaScript component cache is populated only after its
+    # first render and was therefore too late to prevent the login screen.
+    try:
+        remembered = st.context.cookies[cookie_name]
+    except (KeyError, TypeError, AttributeError):
+        remembered = device_cookie_controller.get(cookie_name)
     if forget:
         if remembered is not None:
             device_cookie_controller.remove(cookie_name)
@@ -1250,10 +1256,9 @@ def browser_session_bridge() -> None:
             )
         return
     if isinstance(remembered, str) and remembered:
-        try:
-            st.query_params["session"] = remembered
-        except Exception:
-            pass
+        # Pass it directly to Python authentication on this same run. Waiting
+        # for a query-parameter rerun caused the login page to win the race.
+        st.session_state._remembered_session_token = remembered
 
 
 def restore_session_from_url() -> None:
@@ -1264,6 +1269,7 @@ def restore_session_from_url() -> None:
         token = str(st.query_params.get("session", "")).strip()
     except Exception:
         token = ""
+    token = token or str(st.session_state.pop("_remembered_session_token", "")).strip()
     if not token or "." not in token:
         return
     encoded, supplied_signature = token.split(".", 1)
