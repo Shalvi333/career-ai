@@ -1185,6 +1185,7 @@ def init_state() -> None:
     defaults = {"app_stage":"login", "auth_mode":"login", "light_mode":False, "nav_page":"Dashboard", "student_name":"", "student_email":"", "quiz_name":"", "intake_mode":None, "intake_index":0, "intake_answers":{}, "personality_mode":None, "personality_index":0, "personality_answers":{}, "personality_complete":False, "backend_profile":None, "backend_error":"", "top_matches":[], "career_insights":{}, "score_error":"", "gemini_quiz_status":"", "local_roadmap_completed":set(), "mentor_history":[], "career_journal":{"version":1, "currentPage":0, "pages":[]}, "journal_last_save_token":"", "journal_reminder_checked":False, "weekly_goals":[], "weekly_reminder_checked":False, "feedback_entries":[], "saved_careers":[], "saved_universities":[], "saved_scholarships":[], "account_recovery":{}, "auth_recovery_mode":False, "accessibility_large_text":False, "accessibility_high_contrast":False, "accessibility_reduce_motion":False}
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
+    st.session_state.setdefault("gemini_quiz_error", "")
     # Migrate profiles saved before this page was renamed.
     if st.session_state.get("nav_page") == "Accessibility":
         st.session_state.nav_page = "Display Settings"
@@ -2493,9 +2494,11 @@ def gemini_enhance_career_matches(candidates: tuple[dict[str, object], ...]) -> 
         json.dumps(profile, ensure_ascii=False),
         "Improve education and career recommendations for a student. Rerank only the supplied careers, universities, and scholarships; never add or rename an item. Use the Holland code, RIASEC percentages, written interests, academic direction, preferred country, learning preferences, and constraints. RIASEC and explicit interests are the primary career-fit evidence. University field and country must fit the student's direction and preferences. Scholarships must plausibly fit their subject, destination, and stated needs, but never promise eligibility. Return JSON only: {\"matches\":[{\"career\":string,\"score\":integer 55-95,\"reason\":string}],\"universities\":[\"exact supplied university name\"],\"scholarships\":[\"exact supplied scholarship name\"],\"insights\":[string,string,string]}. Keep reasons concise.",
         max_tokens=1800,
+        preferred_model="gemini-3.1-flash-lite",
     )
     if not isinstance(result, dict) or not isinstance(result.get("matches"), list):
         st.session_state.gemini_quiz_status = "failed"
+        st.session_state.gemini_quiz_error = _error or "SKS AI did not return career matches in the expected format."
         return [], [], {}
     by_name = {match_title(item): dict(item) for item in candidates}
     enhanced: list[dict[str, object]] = []
@@ -2524,6 +2527,7 @@ def gemini_enhance_career_matches(candidates: tuple[dict[str, object], ...]) -> 
             enhanced.append(by_name[name])
     if not seen:
         st.session_state.gemini_quiz_status = "invalid_response"
+        st.session_state.gemini_quiz_error = "SKS AI returned careers outside the verified catalogue."
         return [], [], {}
     enhanced.sort(key=lambda item: float(item.get("score", 0)), reverse=True)
     insights = [str(item).strip() for item in result.get("insights", []) if str(item).strip()][:4]
@@ -2544,6 +2548,7 @@ def gemini_enhance_career_matches(candidates: tuple[dict[str, object], ...]) -> 
         if item not in ai_scholarships:
             ai_scholarships.append(item)
     st.session_state.gemini_quiz_status = "enhanced"
+    st.session_state.gemini_quiz_error = ""
     return enhanced, insights, {
         "universities": ai_universities[:3],
         "scholarships": ai_scholarships[:5],
@@ -3996,7 +4001,8 @@ def render_intake_results() -> None:
     if gemini_status == "enhanced":
         st.success("✦ SKS AI refined your career, university, and scholarship matches from the completed profile.")
     elif gemini_status in {"failed", "invalid_response"}:
-        st.warning("SKS AI could not refine this attempt, so your reliable local career matches are shown instead.")
+        detail = str(st.session_state.get("gemini_quiz_error") or "Please try again shortly.")
+        st.warning(f"SKS AI could not refine this attempt, so your reliable local career matches are shown instead. {detail}")
     elif gemini_status == "not_configured":
         st.info("Configure the SKS AI service to enable AI-refined quiz results.")
     stat1, stat2, stat3 = st.columns(3)
@@ -4104,7 +4110,8 @@ def render_personality_results() -> None:
     if gemini_status == "enhanced":
         st.success("✦ SKS AI combined your written answers and RIASEC profile to refine careers, universities, and scholarships.")
     elif gemini_status in {"failed", "invalid_response"}:
-        st.warning("SKS AI could not refine this attempt, so your deterministic RIASEC results are shown instead.")
+        detail = str(st.session_state.get("gemini_quiz_error") or "Please try again shortly.")
+        st.warning(f"SKS AI could not refine this attempt, so your deterministic RIASEC results are shown instead. {detail}")
     elif gemini_status == "not_configured":
         st.info("Configure the SKS AI service to connect it to these RIASEC results.")
     saved_profile = st.session_state.backend_profile or {}
