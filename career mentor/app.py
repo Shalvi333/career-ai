@@ -5767,11 +5767,16 @@ def render_talk_it_out() -> None:
             st.rerun()
     if st.session_state.get("talk_last_error"):
         st.caption(st.session_state.talk_last_error)
-    for item in st.session_state.talk_history:
-        role = "You" if item.get("role") == "student" else "SKS AI"
-        css_class = "panel" if role == "You" else "ai-card"
-        content = escape(str(item.get("message") or "")).replace("\n", "<br>")
-        st.markdown(f"<div class='{css_class}'><b>{role}</b><p>{content}</p></div>", unsafe_allow_html=True)
+    # Keep each thought and response together, but place the newest exchange
+    # first so users never need to scroll past older conversations.
+    history = st.session_state.talk_history
+    exchanges = [history[position:position + 2] for position in range(0, len(history), 2)]
+    for exchange in reversed(exchanges):
+        for item in exchange:
+            role = "You" if item.get("role") == "student" else "SKS AI"
+            css_class = "panel" if role == "You" else "ai-card"
+            content = escape(str(item.get("message") or "")).replace("\n", "<br>")
+            st.markdown(f"<div class='{css_class}'><b>{role}</b><p>{content}</p></div>", unsafe_allow_html=True)
 
 
 def render_ai_mentor() -> None:
