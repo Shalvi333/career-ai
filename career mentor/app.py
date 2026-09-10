@@ -3872,21 +3872,26 @@ def render_intake() -> None:
         go_next = st.form_submit_button(next_label, type="primary", use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-    previous, quit_col = st.columns([1, 1])
-    with previous:
-        go_previous = index > 0 and st.button("← Previous", use_container_width=True, key=f"intake_previous_{index}")
-    with quit_col:
-        quit_clicked = st.button("Quit quiz", use_container_width=True, key=f"intake_quit_{index}")
+    # Do not redraw secondary controls during an AI submission. Streamlit
+    # keeps the previous page visible while a rerun is working; drawing these
+    # again before the spinner produced the duplicate disabled row seen by
+    # students.
+    if not go_next:
+        previous, quit_col = st.columns([1, 1])
+        with previous:
+            go_previous = index > 0 and st.button("← Previous", use_container_width=True, key=f"intake_previous_{index}")
+        with quit_col:
+            quit_clicked = st.button("Quit quiz", use_container_width=True, key=f"intake_quit_{index}")
 
-    if go_previous:
-        st.session_state.intake_answers[key] = str(st.session_state.get(f"widget_{key}", answer)).strip()
-        st.session_state.intake_index -= 1
-        save_current_student_state()
-        st.rerun()
-    if quit_clicked:
-        st.session_state.intake_answers[key] = str(st.session_state.get(f"widget_{key}", answer)).strip()
-        quit_current_quiz()
-        st.rerun()
+        if go_previous:
+            st.session_state.intake_answers[key] = str(st.session_state.get(f"widget_{key}", answer)).strip()
+            st.session_state.intake_index -= 1
+            save_current_student_state()
+            st.rerun()
+        if quit_clicked:
+            st.session_state.intake_answers[key] = str(st.session_state.get(f"widget_{key}", answer)).strip()
+            quit_current_quiz()
+            st.rerun()
     if go_next:
         validation_error = intake_answer_error(index, answer, prompt)
         if validation_error:
@@ -3976,23 +3981,24 @@ def render_personality() -> None:
         # accidentally activate Previous.
         go_next = st.form_submit_button("See results  →" if final else "Next question  →", type="primary", use_container_width=True)
 
-    previous, quit_col = st.columns([1, 1])
-    with previous:
-        go_previous = index > 0 and st.button("← Previous", use_container_width=True, key=f"personality_previous_{index}")
-    with quit_col:
-        quit_clicked = st.button("Quit quiz", use_container_width=True, key=f"personality_quit_{index}")
+    if not go_next:
+        previous, quit_col = st.columns([1, 1])
+        with previous:
+            go_previous = index > 0 and st.button("← Previous", use_container_width=True, key=f"personality_previous_{index}")
+        with quit_col:
+            quit_clicked = st.button("Quit quiz", use_container_width=True, key=f"personality_quit_{index}")
 
-    if go_previous:
-        if value is not None:
-            st.session_state.personality_answers[value_key] = value
-        st.session_state.personality_index -= 1
-        save_current_student_state()
-        st.rerun()
-    if quit_clicked:
-        if value is not None:
-            st.session_state.personality_answers[value_key] = value
-        quit_current_quiz()
-        st.rerun()
+        if go_previous:
+            if value is not None:
+                st.session_state.personality_answers[value_key] = value
+            st.session_state.personality_index -= 1
+            save_current_student_state()
+            st.rerun()
+        if quit_clicked:
+            if value is not None:
+                st.session_state.personality_answers[value_key] = value
+            quit_current_quiz()
+            st.rerun()
     if go_next:
         if value is None:
             st.error("Please select a rating before continuing.")
